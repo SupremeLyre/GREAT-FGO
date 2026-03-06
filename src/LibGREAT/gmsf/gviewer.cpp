@@ -87,13 +87,16 @@ great::gviewer::gviewer()
 
 great::gviewer::~gviewer()
 {
-    gviewer::vptr.erase(std::find(gviewer::vptr.begin(), gviewer::vptr.end() - 1, this));
-
+    Hide();
+    auto it = std::find(gviewer::vptr.begin(), gviewer::vptr.end(), this);
+    if (it != gviewer::vptr.end())
+        gviewer::vptr.erase(it);
 }
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
+    if (height == 0) height = 1;
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -408,7 +411,8 @@ void great::gviewer::Hide()
 
     mb_stop = true;
     //Sleep(2000);
-    t->join();
+    if (t->joinable())
+        t->join();
     delete t;
     window = nullptr;
     t = nullptr;

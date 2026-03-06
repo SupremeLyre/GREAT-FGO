@@ -1196,7 +1196,7 @@ void gfgomsf::t_gfgo_gins::_slide_gins()
 			_all_gnss_node.erase(_all_gnss_node.begin(), it_0);
 		}
 
-		while (_map_motion.rbegin()->first - _map_motion.begin()->first > 60 * 10)
+		while (!_map_motion.empty() && _map_motion.rbegin()->first - _map_motion.begin()->first > 60 * 10)
 		{
 			_map_motion.erase(std::begin(_map_motion));
 		}

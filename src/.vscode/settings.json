@@ -1,4 +1,12 @@
 {
+    "cmake.debugConfig": {
+        "args": [
+            "-x",
+            "xml/GREAT-GINSFGO-TC-RTKINS-0928-campus.xml",
+            // "xml/GREAT-PVTFGO-RTK-0928-campus.xml",
+        ],
+        "cwd": "${workspaceFolder}/../sample_data/FGO_20250928"
+    },
     "ROS2.distro": "jazzy",
     "python.autoComplete.extraPaths": [
         "/opt/ros/jazzy/lib/python3.12/site-packages"

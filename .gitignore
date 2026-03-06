@@ -1,3 +1,6 @@
 /.vs
 /src/build/
 /src/build_*/
+/sample_data/FGO_*
+/sample_data/MSF_*
+/sample_data/PPPFLT_*
