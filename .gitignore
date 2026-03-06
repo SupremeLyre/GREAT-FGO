@@ -1,1 +1,3 @@
 /.vs
+/src/build/
+/src/build_*/

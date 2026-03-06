@@ -415,7 +415,7 @@ void gfgomsf::t_gamb_manager::addRover(double time, string sat_name, const int &
 		return it.second->_sat_name == sat_name;
 
 	});
-	assert(iter != _sat_map.end());
+	assert(iter != _sat_map.rend());
 	iter->second->time_span.push_back(time);
 	int old_sat_index = iter->second->_global_id;
 	vector<int> amb_ids = _sat_map[old_sat_index]->_amb_ids;
@@ -443,7 +443,7 @@ void gfgomsf::t_gamb_manager::addRover( string sat_name, const int & rover_index
 		++iter;
 	}
 	*/
-	assert(iter != _sat_map.end());
+	assert(iter != _sat_map.rend());
 	
 	int old_sat_index = iter->second->_global_id;	
 	vector<int> amb_ids = _sat_map[old_sat_index]->_amb_ids;

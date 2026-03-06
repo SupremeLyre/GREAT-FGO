@@ -26,12 +26,11 @@ message(STATUS " ===============================================================
 
 # compiler setting
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
 
 # Compilation options settings
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-    add_compile_options(-O3)
+    # add_compile_options(-O3)
     # add_compile_options(-w)
     add_compile_options(-m64)
     add_compile_options(-lz)
@@ -46,19 +45,19 @@ elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
     add_compile_options(-pthread)
 elseif(CMAKE_SYSTEM_NAME MATCHES "Windows")
     SET(BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}_Windows)
+    if(MSVC)
     add_compile_options(/bigobj)
     add_compile_options(/MP4)
     add_compile_options(/w)
+    else()
+    add_compile_options(-Wa,-mbig-obj)
+    endif()
 endif()
 
-if(COMPILER_SUPPORTS_CXX11)
-    set(CMAKE_CXX_STANDARD 11)
+if(COMPILER_SUPPORTS_CXX17)
+    set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
-elseif(COMPILER_SUPPORTS_CXX0X)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -pthread")
-else()
-    message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread")
 endif()
 
 # Choose different compilation configurations according to VS compilation
@@ -85,7 +84,7 @@ set(CMAKE_DEBUG_POSTFIX "d")
 set(CMAKE_RELEASE_POSTFIX "")
 set(CMAKE_RELWITHDEBINFO_POSTFIX "rd")
 set(CMAKE_MINSIZEREL_POSTFIX "s")
-
+set(Third_Eigen_ROOT ${ROOT}/Third-party/Eigen)
 # Output Messages for debug the Cmake
 message(STATUS "operation system is : ${CMAKE_SYSTEM}")
 message(STATUS "current platform is : ${CMAKE_SYSTEM_NAME}")
@@ -95,7 +94,6 @@ message(STATUS "C++ compiler     is : ${CMAKE_CXX_COMPILER}")
 message(STATUS "Build directory  is : ${BUILD_DIR}")
 message(STATUS "The program main directory is : ${ROOT}")
 
-    
 
 # set lib name
 set(file_fold 
@@ -110,13 +108,11 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     #For windows
     # ==============================================================================
     if (NOT DEFINED Third_Eigen_ROOT)
-        find_path(Third_Eigen_ROOT       HINTS "${Third_Eigen_ROOT}"        "$ENV{Third_Eigen_ROOT}            ")
+        set(Third_Eigen_ROOT       ${ROOT}/Third-party/Eigen)
     endif()
 
     if (NOT DEFINED Third_GLFW_ROOT)
-        find_path(Third_GLFW_ROOT        HINTS "${Third_GLFW_ROOT}"         "$ENV{Third_GLFW_ROOT}         ")
-		
-	
+        set(Third_GLFW_ROOT       ${ROOT}/Third-party/GLFW)
     endif()
 
 	
@@ -126,13 +122,13 @@ else()
     # write write_your_path_here
     # ==============================================================================
     if (NOT DEFINED Third_Eigen_ROOT)
-        set(Third_Eigen_ROOT       ${ROOT}/third-party/Eigen)
+        set(Third_Eigen_ROOT       ${ROOT}/Third-party/Eigen)
     endif()
-
     if (NOT DEFINED Third_GLFW_ROOT)
-        set(Third_GLFW_ROOT       ${ROOT}/third-party/GLFW)
+        set(Third_GLFW_ROOT       ${ROOT}/Third-party/GLFW)
     endif()
-	
+    find_package(OpenGL REQUIRED)
+    find_package(glfw3 3.3 REQUIRED)
     # ==============================================================================
 endif()
 

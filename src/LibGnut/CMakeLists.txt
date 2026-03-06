@@ -14,7 +14,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     #For windows
     # ==============================================================================
     if (NOT DEFINED Third_Eigen_ROOT)
-        find_path(Third_Eigen_ROOT       HINTS "${Third_Eigen_ROOT}"        "$ENV{Third_Eigen_ROOT}            ")
+        set(Third_Eigen_ROOT       ${ROOT}/Third-party/Eigen)
     endif()
 
     # ==============================================================================
@@ -23,9 +23,8 @@ else()
     # write write_your_path_here
     # ==============================================================================
     if (NOT DEFINED Third_Eigen_ROOT)
-        set(Third_Eigen_ROOT       ${ROOT}/third-party/Eigen)
+        set(Third_Eigen_ROOT       ${ROOT}/Third-party/Eigen)
     endif()
-
     # ==============================================================================
 endif()
 

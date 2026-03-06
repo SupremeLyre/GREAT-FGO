@@ -16,13 +16,13 @@ if(CMAKE_SYSTEM_NAME MATCHES "Windows")
     #For windows
     # ==============================================================================
     if (NOT DEFINED Third_Eigen_ROOT)
-        find_path(Third_Eigen_ROOT       HINTS "${Third_Eigen_ROOT}"        "$ENV{Third_Eigen_ROOT}            ")
+        set(Third_Eigen_ROOT       ${ROOT}/Third-party/Eigen)
     endif()
     if (NOT DEFINED Third_GLFW_ROOT)
-        set(Third_GLFW_ROOT       ${ROOT}/third-party/GLFW)
+        set(Third_GLFW_ROOT       ${ROOT}/Third-party/GLFW)
     endif()
 	if (NOT DEFINED Third_ceres_ROOT)
-        	find_path(Third_ceres_ROOT       HINTS "${ceres_ROOT}"        "$ENV{ceres_ROOT}            ")
+        set(Third_ceres_ROOT      ${ROOT}/Third-party/ceres)
     endif()
 
     # ==============================================================================
@@ -31,24 +31,29 @@ else()
     # write write_your_path_here
     # ==============================================================================
     if (NOT DEFINED Third_Eigen_ROOT)
-        set(Third_Eigen_ROOT       ${ROOT}/third-party/Eigen)
+        set(Third_Eigen_ROOT       ${ROOT}/Third-party/Eigen)
     endif()
     if (NOT DEFINED Third_GLFW_ROOT)
-        set(Third_GLFW_ROOT       ${ROOT}/third-party/GLFW)
+        set(Third_GLFW_ROOT       ${ROOT}/Third-party/GLFW)
     endif()
 	if (NOT DEFINED Third_ceres_ROOT)
-        set(Third_ceres_ROOT      ${ROOT}/third-party/ceres)   
+        set(Third_ceres_ROOT      ${ROOT}/Third-party/ceres)
     endif()
-	
+    find_package(OpenGL REQUIRED)
+    find_package(glfw3 3.3 REQUIRED)
+    find_package(Ceres REQUIRED)
     # ==============================================================================
 endif()
 
 # set include path
 include_directories(${Third_Eigen_ROOT})
 include_directories(${Third_GLFW_ROOT}/include)
-include_directories(${Third_ceres_ROOT}/include)  
 include_directories(${LibGnutSrc})
 include_directories(${LibGREATSrc})
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+    include_directories(${Third_ceres_ROOT}/include)
+else()
+endif()
 
 #message(STATUS "                                                                     ")
 message(STATUS " include path for ${LibGPP} is : ${Third_Eigen_ROOT}")
@@ -145,12 +150,13 @@ set(FGO_dllfile
 	
 else()		
 	# linux need todo
-	link_directories(${ROOT}/build/Lib)
+	link_directories(${BUILD_DIR}/Lib)
 	if(Main_USE_EXELIB)
 		target_link_libraries(${PROJECT_NAME}	debug	${ExeLib}/libLibBased.so	optimized	${ExeLib}/libLibBase.so	)
 		target_link_libraries(${PROJECT_NAME}	debug	${ExeLib}/libLibSetd.so		optimized	${ExeLib}/libLibSet.so	)
 		target_link_libraries(${PROJECT_NAME}	debug	${ExeLib}/libLibGnutd.so	optimized	${ExeLib}/libLibGnut.so	)
 	endif()
+    target_link_libraries(${PROJECT_NAME} OpenGL::GL glfw Ceres::ceres)
 endif()
 # ==========================================================================================================================================
 target_link_libraries(${PROJECT_NAME}    ${LibGnut})
