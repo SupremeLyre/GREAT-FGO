@@ -69,8 +69,8 @@ namespace gnut
                     _version = tmp.substr(1, 1);
                     _start.from_str("%Y %m %d  %H %M %S", tmp.substr(3, 30));
                     _nepochs = str2int(tmp.substr(32, 7));
-                    _orbrefs = tmp.substr(46, 5);
-                    _orbtype = tmp.substr(52, 3);
+                    // _orbrefs = tmp.substr(46, 5);
+                    // _orbtype = tmp.substr(52, 3);
                     if (tmp.size() > 60)
                     {
                         _agency = tmp.substr(56, 4);

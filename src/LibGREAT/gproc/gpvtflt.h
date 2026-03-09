@@ -383,7 +383,9 @@ namespace great
         RECEIVERTYPE _receiverType;       ///< receiver Type
         map<string, string> _sat_freqs;   ///< sat freqs
 
-
+        map<string, map<GOBSBAND, double>> _prev_L;  ///< previous phase for TDCP
+        map<string, t_gtime> _prev_time;             ///< previous time for TDCP
+        int _doppler_sign_flag = 0;                  ///< doppler sign flag (0: undetermined, 1: pos, -1: neg)
         
         t_gtriple _extn_pos, _extn_rms; // external position and its rms
         bool _pos_constrain;
