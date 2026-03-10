@@ -356,7 +356,12 @@ namespace great
          * @return int
          */
         int nr(); ///< TODO
-
+        /**
+         * @brief
+         *
+         * @return double
+         */
+        double TS_odo(); ///< TODO for ODO
         /**
         * @brief    get maximum time delay.
         * @return    double     maximum time delay
@@ -375,7 +380,11 @@ namespace great
         * @return    double     maximum of PDOP
         */
         double max_pdop();
-
+        /**
+        * @brief 
+        * @return    double
+        */
+        double IsUseFloatSolution();
         /**
         * @brief    get minimum number of satellite.
         * @return    int     minimum number of satellite

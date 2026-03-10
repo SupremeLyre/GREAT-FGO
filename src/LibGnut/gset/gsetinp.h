@@ -49,6 +49,7 @@ namespace gnut
         RINEXO_INP,      ///< rinexo file
         BLQ_INP,         ///< oceanload file
         IMU_INP,         ///< imu file for inertial navigation system (by zhshen)
+        ODO_INP,       ///< odo file (by zhshen)
         DE_INP,          ///< DE405 file
         LEAPSECOND_INP,  ///< leapsecond file
         UPD_INP,         ///< upd file

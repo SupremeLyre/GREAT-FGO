@@ -6,7 +6,7 @@ t_gcfg_ign::t_gcfg_ign() :
     t_gsetign()
 {
     _IFMT_supported.insert(IFMT::IMU_INP);
-
+    _IFMT_supported.insert(IFMT::ODO_INP);
     _OFMT_supported.insert(INS_OUT);
 }
 

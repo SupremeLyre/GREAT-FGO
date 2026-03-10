@@ -142,7 +142,7 @@ void great::t_gsins::prt_header(ostringstream &os, bool imu_scale, bool use_odo)
         os << setw(12) << "OdoScale";
     os << setw(12) << "MeasType" << setw(7) << "Nsat" << setw(7) << "PDOP" << setw(12) << "AmbStatus" << setw(7)
        << "Ratio";
-    os << "         " << endl;
+    os << "   ratio" << endl;
 
     // the second line
     os << "# ";
@@ -247,6 +247,9 @@ great::t_gsinskf::t_gsinskf(gnut::t_gsetbase *gset, t_spdlog spdlog, string site
         nq += 6; // gyro and acce scale factors
     if (_shm._imu_inst_rot)
         nq += 3; // gyro and acce scale factors
+    if (_shm._odo)
+        nq += 1; // default(in xml): 15, if(_odo)nq++;
+    _odoscale = dynamic_cast<t_gsetign *>(_setkf)->odo_scale() - 1.0;
     // if (_shm._odo) nq += 1;// default(in xml): 15, if(_odo)nq++;
     _Cov_MeasOdo = pow(dynamic_cast<t_gsetign *>(_setkf)->odo_std(), 2);
     _Cov_MeasNHC = dynamic_cast<t_gsetign *>(_setkf)->NHC_std().array().abs2();
@@ -272,6 +275,11 @@ void great::t_gsinskf::Add_IMU(t_gimudata *imu)
     return;
 }
 
+void great::t_gsinskf::Add_ODO(t_gododata *odo)
+{
+    _ododata = odo;
+}
+
 void great::t_gsinskf::init_par(string site)
 {
     _name = site;
@@ -287,7 +295,18 @@ void great::t_gsinskf::init_par(string site)
     // bias
     for (int ipar = (int)par_type::eb_X; ipar <= (int)par_type::db_Z; ipar++)
         param_of_sins.addParam(t_gpar(site, par_type(ipar), ipar, ""));
+    if (_shm._odo)
+    {
+        param_of_sins.addParam(t_gpar(site, par_type::ODO_k, (int)par_type::ODO_k, ""));
+    }
 
+    if (_shm._imu_inst_rot)
+    {
+        param_of_sins.addParam(t_gpar(site, par_type::IMU_INST_ATT_X, (int)par_type::IMU_INST_ATT_X, ""));
+        param_of_sins.addParam(
+            t_gpar(site, par_type::IMU_INST_ATT_Y, (int)par_type::IMU_INST_ATT_Y, "")); // un-observable by NHC
+        param_of_sins.addParam(t_gpar(site, par_type::IMU_INST_ATT_Z, (int)par_type::IMU_INST_ATT_Z, ""));
+    }
     param_of_sins.reIndex();
 }
 
@@ -296,6 +315,11 @@ void great::t_gsinskf::init_par(string site)
 int great::t_gsinskf::get_last_idx()
 {
     int idx = param_of_sins.getParam(_name, par_type::db_Z, "");
+
+    if (_shm._odo)
+        idx = param_of_sins.getParam(_name, par_type::ODO_k, "");
+    if (_shm._imu_inst_rot)
+        idx = param_of_sins.getParam(_name, par_type::IMU_INST_ATT_Z, "");
 
     return idx;
 }
@@ -444,6 +468,10 @@ void great::t_gsinskf::set_Hk()
 {
     Eigen::Vector3d vartheta =
         sins.Ceb * t_gbase::askew(lever) * sins.wib + t_gbase::askew(sins.eth.weie) * sins.Ceb * lever;
+    Eigen::Matrix3d PhiH;
+    int iodo = param_of_sins.getParam(_name, par_type::ODO_k, "");
+    int irot = param_of_sins.getParam(_name, par_type::IMU_INST_ATT_X, "");
+    static bool first_nhc = true;
     switch (Flag)
     {
     case POS_VEL_MEAS:
@@ -462,17 +490,84 @@ void great::t_gsinskf::set_Hk()
         Hk.block(0, 0, 3, 3) = -t_gbase::askew(vartheta);         // vel-att
         Hk.block(0, 9, 3, 3) = -sins.Ceb * t_gbase::askew(lever); // vel-eb
         break;
+    case ZUPT_MEAS:
+        Hk.block(0, 3, 3, 3) = Eigen::Matrix3d::Identity(); // ZUPT-vel
+        break;
+    case NHC_MEAS:
+        // if (first_nhc) {
+        //     std::cout << "[NHC] First measurement - odo_lever: "
+        //         << odo_lever.transpose() << std::endl;
+        //     first_nhc = false;
+        // }
+        PhiH =
+            sins.Cbe * t_gbase::askew(sins.ve) + t_gbase::askew(odo_lever) * sins.Cbe * t_gbase::askew(sins.eth.weie);
+        Hk.block(0, 0, 1, 3) = -(sins.Cvb * PhiH).block(0, 0, 1, 3);                      // NHC(right)-att
+        Hk.block(0, 3, 1, 3) = (sins.Cvb * sins.Cbe).block(0, 0, 1, 3);                   // NHC(right)-vel
+        Hk.block(0, 9, 1, 3) = -(sins.Cvb * t_gbase::askew(odo_lever)).block(0, 0, 1, 3); // NHC(right)-eb
+        Hk.block(1, 0, 1, 3) = -(sins.Cvb * PhiH).block(2, 0, 1, 3);                      // NHC(up)-att
+        Hk.block(1, 3, 1, 3) = (sins.Cvb * sins.Cbe).block(2, 0, 1, 3);                   // NHC(up)-vel
+        Hk.block(1, 9, 1, 3) = -(sins.Cvb * t_gbase::askew(odo_lever)).block(2, 0, 1, 3); // NHC(up)-eb
+        if (_shm._imu_inst_rot)
+        {
+            Hk.block(0, irot, 1, 3) =
+                t_gbase::askew(sins.Cvb * (sins.vb + t_gbase::askew(sins.web) * odo_lever)).block(0, 0, 1, 3);
+            Hk.block(1, irot, 1, 3) =
+                t_gbase::askew(sins.Cvb * (sins.vb + t_gbase::askew(sins.web) * odo_lever)).block(2, 0, 1, 3);
+            // PhiH = t_gbase::askew(sins.Cvb * (sins.vb + t_gbase::askew(sins.web) * odo_lever));
+            // Hk(0, irot) = PhiH(0, 0); Hk(0, irot + 1) = PhiH(0, 2);
+            // Hk(1, irot) = PhiH(2, 0); Hk(1, irot + 1) = PhiH(2, 2);
+        }
+        break;
+    case ODO_MEAS:
+        PhiH =
+            sins.Cbe * t_gbase::askew(sins.ve) + t_gbase::askew(odo_lever) * sins.Cbe * t_gbase::askew(sins.eth.weie);
+        Hk.block(0, 0, 1, 3) = -PhiH.block(1, 0, 1, 3);                      // odo-att
+        Hk.block(0, 3, 1, 3) = sins.Cbe.block(1, 0, 1, 3);                   // odo-vel
+        Hk.block(0, 9, 1, 3) = -t_gbase::askew(odo_lever).block(1, 0, 1, 3); // odo-eb
+        Hk(0, iodo) = -MeasVf;                                               // odo-scale
+        MeasVf = 0;
+        break;
     default:
         break;
     }
 }
 
+bool great::t_gsinskf::set_meas_ZUPT(double t)
+{
+    MeasVel = Eigen::Vector3d::Zero();
+    // MeasVel = sins.ve;
+    tmeas = t;
+    Flag = ZUPT_MEAS;
+    return true;
+}
+
+bool great::t_gsinskf::set_meas_NHC(double t)
+{
+    MeasVel = Eigen::Vector3d::Zero();
+    tmeas = t;
+    Flag = NHC_MEAS;
+    return true;
+}
+
+bool great::t_gsinskf::set_meas_ODO(const double &vf, double t)
+{
+    MeasVf = vf;
+    tmeas = t;
+    Flag = ODO_MEAS;
+    return true;
+}
 MOTION_TYPE great::t_gsinskf::motion_state()
 {
+    double vf = -t_gglv::INF;
     if (sins.wnb.norm() < 1.5 * t_gglv::dps && abs(sins.vb(1)) > 5)
         return m_straight;
     else if (sins.an.norm() < 1 && sins.wnb.norm() < 1 * t_gglv::dps && sins.vn.norm() < 0.1)
         return m_static;
+    else if (_ododata->load(_ins_crt, vf, _shm.delay_odo))
+    {
+        if (sins.vn.norm() < 1 && abs(vf) < 0.1)
+            return m_static;
+    }
     else
         return m_default;
 }
@@ -511,6 +606,16 @@ void great::t_gsinskf::feedback()
         sins.Ka = sins.Ka - Xk.block(iscale + 3, 0, 3, 1);
     }
 
+    if (_shm._imu_inst_rot)
+    {
+        cout << "imu_inst_att: " << fixed << setprecision(10) << setw(15)
+             << t_gbase::q2att(sins.qvb).transpose() / t_gglv::deg << endl;
+        sins.qvb = sins.qvb - Xk.block(irot, 0, 3, 1);
+        sins.Cvb = t_gbase::q2mat(sins.qvb);
+        sins.Cbv = sins.Cvb.transpose();
+    }
+    if (_shm._odo)
+        _odoscale = _odoscale - Xk(iodo, 0);
     sins.pos = Cart2Geod(sins.pos_ecef, false);
     sins.eth.Update(sins.pos, sins.vn);
     sins.vn = sins.eth.Cne * sins.ve;
@@ -525,7 +630,7 @@ void great::t_gsinskf::write()
     ostringstream os;
     _prt_ins_kml();
     sins.prt_sins(os);
-
+    sins.prt_header(os, _shm._imu_scale, _shm._odo);
     _fins->write(os.str().c_str(), os.str().size());
     os.str("");
 }
@@ -577,7 +682,12 @@ bool great::t_gsinskf::_ins_init()
     gscale_tmp = dynamic_cast<t_gsetign *>(_setkf)->initial_gyro_scale_std();
     ascale_tmp = dynamic_cast<t_gsetign *>(_setkf)->initial_acce_scale_std();
     inst_att_tmp = dynamic_cast<t_gsetign *>(_setkf)->initial_imu_installation_att_std();
-    v << angle_tmp * t_gglv::deg, v_tmp, pos_tmp, eb_tmp * t_gglv::dph, db_tmp * t_gglv::mg;
+    v.head<15>() << angle_tmp * t_gglv::deg, v_tmp, pos_tmp, eb_tmp * t_gglv::dph, db_tmp * t_gglv::mg;
+
+    if (_shm._odo)
+        v(iodo) = dk_tmp;
+    if (_shm._imu_inst_rot)
+        v.block(irot, 0, 3, 1) = inst_att_tmp * t_gglv::deg;
 
     v = v.array().abs2();
     Pk = v.array().matrix().asDiagonal();
@@ -607,8 +717,13 @@ bool great::t_gsinskf::_ins_init()
     ascale_tmp = dynamic_cast<t_gsetign *>(_setkf)->acce_scale_psd();
     inst_att_tmp = dynamic_cast<t_gsetign *>(_setkf)->imu_inst_rot_psd();
     dk_tmp = dynamic_cast<t_gsetign *>(_setkf)->odo_psd();
-    Qt << angle_tmp * t_gglv::dpsh, v_tmp * t_gglv::mgpsHz, pos_tmp * t_gglv::mpsh, eb_tmp * t_gglv::dphpsh,
+    Qt.head<15>() << angle_tmp * t_gglv::dpsh, v_tmp * t_gglv::mgpsHz, pos_tmp * t_gglv::mpsh, eb_tmp * t_gglv::dphpsh,
         db_tmp * t_gglv::mgpsh;
+
+    if (_shm._odo)
+        Qt(iodo) = dk_tmp * t_gglv::mpsh;
+    if (_shm._imu_inst_rot)
+        Qt.block(irot, 0, 3, 1) = inst_att_tmp * t_gglv::dpsh;
 
     Qt = Qt.array().abs2();
     if (_spdlogkf)
@@ -633,6 +748,33 @@ bool great::t_gsinskf::_valid_ins_constraint()
     // todo: customizable
 
     return true;
+}
+int great::t_gsinskf::_ZUPT_Update()
+{
+    if (!set_meas_ZUPT(_ins_crt.sow() + _ins_crt.dsec()))
+        return -1;
+
+    int irc = _meas_update();
+    return irc;
+}
+
+int great::t_gsinskf::_NHC_Update()
+{
+    set_meas_NHC(_ins_crt.sow() + _ins_crt.dsec());
+    int irc = _meas_update();
+    return irc;
+}
+
+int great::t_gsinskf::_ODO_Update()
+{
+    double crt = _ins_crt.sow() + _ins_crt.dsec();
+    // get velocity
+    double vf = 0;
+    if (!_ododata->load(_ins_crt, vf, _shm.delay_odo))
+        return -1;
+    set_meas_ODO(vf, crt);
+    int irc = _meas_update();
+    return irc;
 }
 
 void great::t_gsinskf::time_update(double kfts, double inflation)
@@ -710,6 +852,27 @@ bool great::t_gsinskf::_set_meas()
         Rk.block(0, 0, 3, 3) = _Cov_MeasVn.array().matrix().asDiagonal();
         measflag = 1;
         MeasVel = MeasPos = Eigen::Vector3d::Zero();
+        break;
+    case ZUPT_MEAS:
+        Zk.block(0, 0, 3, 1) = sins.ve - MeasVel;
+        Rk.block(0, 0, 3, 3) = _Cov_MeasZUPT.array().matrix().asDiagonal();
+        measflag = 1;
+        MeasVel = Eigen::Vector3d::Zero();
+        break;
+    case NHC_MEAS:
+        Zk(0) = (sins.Cvb * sins.vb - MeasVel + sins.Cvb * (t_gbase::askew(sins.web) * odo_lever))(0);
+        Zk(1) = (sins.Cvb * sins.vb - MeasVel + sins.Cvb * (t_gbase::askew(sins.web) * odo_lever))(2);
+        Rk(0, 0) = _Cov_MeasNHC(0);
+        Rk(1, 1) = _Cov_MeasNHC(2);
+        MeasVel = Eigen::Vector3d::Zero();
+        measflag = 1;
+        break;
+    case ODO_MEAS: // MeasVf=vb(1)-odo_vel
+        Zk(0) = sins.vb(1) - MeasVf * (1 + _odoscale) + (t_gbase::askew(sins.web) * odo_lever)(1);
+        Rk(0, 0) = _Cov_MeasOdo;
+        measflag = 1;
+        // cout << tmeas << "  " << Zk(0) << " " << -MeasVf * (1 + _odoscale) + (t_gbase::askew(sins.web) *
+        // odo_lever)(1) << " " << sins.vb(1) << endl;
         break;
     case NO_MEAS:
         measflag = 0;

@@ -128,6 +128,7 @@ namespace gnut
             RSSIMAP,          ///< = xx, rssi map
            
             IMUDATA,     ///< = xx, imu data
+            ODODATA,     ///< = xx, odo data
             LAST              ///< = xx, last
         };
 

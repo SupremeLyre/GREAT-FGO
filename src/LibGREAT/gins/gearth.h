@@ -14,7 +14,6 @@
 #ifndef GEARTH_H
 #define GEARTH_H
 
-#include "gbase.h"
 #include "gset/gsetins.h"
 #include "gexport/ExportLibGREAT.h"
 //#include "gutility.h"

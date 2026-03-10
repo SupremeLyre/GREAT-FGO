@@ -19,12 +19,7 @@
 #ifndef GINSBASE_H
 #define GINSBASE_H
 
-#include "gutility.h"
 #include "gins/gquat.h"
-#include "gins/gearth.h"
-#include <string>
-#include <fstream>
-#include <vector>
 #include "gexport/ExportLibGREAT.h"
 using namespace std;
 

@@ -17,6 +17,7 @@
 #include "gdata/gifcb.h"
 #include "gcoders/ifcb.h"
 #include "gcoders/imufile.h"
+#include "gcoders/odofile.h"
 #include "gset/gsetins.h"
 #include "gset/gsetign.h"
 #include "gset/gcfg_ppp.h"

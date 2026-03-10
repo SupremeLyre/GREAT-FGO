@@ -57,6 +57,8 @@ namespace gnut
             return IFMT::IFCB_INP;
         if (tmp == "IMU")
             return IFMT::IMU_INP; 
+         if (tmp == "ODO")
+            return IFMT::ODO_INP;
 
         string message = "The Type : " + tmp + " is not support, check your xml";
         spdlog::warn(message);
@@ -93,6 +95,10 @@ namespace gnut
             return "DE";
 		case IFMT::EOP_INP:
 			return "EOP";
+        case IFMT::IMU_INP:
+            return "IMU";
+        case IFMT::ODO_INP:
+            return "ODO";
         default:
             spdlog::critical("No fmt for {}, check your inp.", f);
             throw logic_error("check your inp");

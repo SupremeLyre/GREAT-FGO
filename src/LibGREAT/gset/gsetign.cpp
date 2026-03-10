@@ -885,6 +885,14 @@ Eigen::Vector3d great::t_gsetign::lever()
     return Vector3d(X, Y, Z);
 }
 
+double great::t_gsetign::TS_odo()
+{
+    _gmutex.lock();
+    //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("TS").as_double();
+    double freq = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Odometer").child("Frequency").attribute("Value").as_double();
+    _gmutex.unlock();
+    return 1.0 / freq;
+}
 double great::t_gsetign::delay_t()
 {
     _gmutex.lock();
@@ -901,6 +909,16 @@ double great::t_gsetign::max_pdop()
     return x;
 }
 
+double great::t_gsetign::IsUseFloatSolution()
+{
+    _gmutex.lock();
+    string str = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("GNSS").child("LCISetting").attribute("UseRTKFloatSolution").value();
+    bool b = false;
+    if (str == "ON")b = true;
+    _gmutex.unlock();
+    return b;
+}
+
 int great::t_gsetign::min_sat()
 {
     _gmutex.lock();
@@ -915,6 +933,7 @@ string great::t_gsetign::odo()
     _gmutex.lock();
     string str = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Odometer").attribute("Type").value();
     _gmutex.unlock();
+    if (str == "OFF" || str == "off") return "";
     return str;
 }
 
