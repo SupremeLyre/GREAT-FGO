@@ -25,7 +25,8 @@
 #include "gutils/gsys.h"
 #include "gutils/gtime.h"
 
-#define MAX_RINEXN_REC 29 ///< maximum number of RINEXN records for any system !!
+#define MAX_RINEXN_REC 39 ///< maximum number of RINEXN records for any system !!
+#define MAX_RINEX4_SEI 27 ///< maximum number of RINEX 4 STO,EOP,ION records for any system (MAX is NavIC L1NV NeQuick-N Model)
 
 #define MAX_NAV_TIMEDIFF 3600 * 2 ///< NAV GNS valitity interval [s]
 #define MAX_GPS_TIMEDIFF 3600 * 2 ///< NAV GPS validity interval [s]

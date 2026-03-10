@@ -79,6 +79,9 @@ namespace gnut
         /** @brief filter out navigation mess. types. */
         bool _filter_gnav(shared_ptr<t_gnav> geph, const string &prn);
 
+        /** @brief decode other RINEX 4 navigation messages (STO, ION, EOP). */
+        int _decode_v4_non_eph(string nav_type, string sat_id, string msg_type, int &recsize, int &consume);
+
 
     private:
         char _gnsssys;           ///< gnss system

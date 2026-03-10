@@ -28,6 +28,9 @@
 #include "gutils/gtriple.h"
 
 #define MAX_RINEXN_REC_BDS 29
+#define MAX_RINEXN_REC_BDS_CNV1 38
+#define MAX_RINEXN_REC_BDS_CNV2 38
+#define MAX_RINEXN_REC_BDS_CNV3 32
 
 using namespace std;
 

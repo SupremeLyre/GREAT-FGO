@@ -29,6 +29,8 @@
 #include "gutils/gtriple.h"
 
 #define MAX_RINEXN_REC_GLO 15
+#define MAX_RINEXN_REC_GLO_L1OC 35
+#define MAX_RINEXN_REC_GLO_L3OC 35
 
 #define MIN_GLO_RADIUS 25300      ///< km
 #define MAX_GLO_RADIUS 25700      ///< km

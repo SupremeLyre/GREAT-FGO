@@ -346,7 +346,8 @@ int t_rinexn::decode_head(char *buff, int sz, vector<string> &errmsg)
 
             // -------- "COMMENT" --------
         }
-        else if (line.find("COMMENT", 60) != string::npos)
+        else if (line.find("COMMENT", 60) != string::npos || line.find("DOI", 60) != string::npos ||
+                 line.find("MERGED FILE", 60) != string::npos)
         {
             _comment.push_back(line.substr(0, 60));
 
@@ -424,16 +425,13 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
     int consume = 0;
     int tmpsize = 0;
     int recsize = 0;
+    string msg_type_str = "";
 
     while ((tmpsize = t_gcoder::_getline(line, 0)) >= 0)
     {
 
         consume += tmpsize;
         recsize += tmpsize;
-        string epostr = line.substr(b, e);
-
-        istringstream istr(line.substr(b, e));
-        istr.clear();
 
         string prn;
         int yr, mn, dd, hr, mi;
@@ -451,6 +449,11 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
         case '3':
             min_sz = 23;
             break; // RINEX 3
+        case '4':
+            min_sz = 14;
+            break; // RINEX 4
+        default:
+            break;
         }
 
         if (line.size() > 82 || _decode_buffer.size() <= min_sz)
@@ -476,7 +479,7 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
             }
             prn = t_gsys::eval_sat(svn, t_gsys::char2gsys(_gnsssys));
         }
-        else
+        else if (_version[0] == '3')
         {
             int isec = 0;
             char sat[3 + 1];
@@ -494,19 +497,88 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
 
             sec = isec;
         }
+        else if (_version[0] == '4')
+        {
+            if (line[0] != '>')
+            {
+                t_gcoder::_consume(tmpsize);
+                recsize = consume = 0;
+                continue;
+            }
+
+            char nav_type[4];
+            char sat_id[4];
+            char msg_type[5];
+            irc = sscanf(tmpbuff, "> %3s %3s %4s", nav_type, sat_id, msg_type);
+            if (irc < 3)
+            {
+                t_gcoder::_consume(tmpsize);
+                recsize = consume = 0;
+                continue;
+            }
+
+            msg_type_str = string(msg_type);
+            string s_nav_type(nav_type);
+            if (s_nav_type == "EPH")
+            {
+                tmpsize = t_gcoder::_getline(line, recsize);
+                if (tmpsize < 0)
+                    break;
+
+                consume += tmpsize;
+                recsize += tmpsize;
+
+                int isec = 0;
+                char sat[3 + 1];
+                sat[3] = '\0';
+
+                // For EPH, the second line format matches RINEX 3 exactly
+                irc = sscanf(line.c_str(), "%c%2d%*[ ] %4d%*[ ] %2d%*[ ]%2d%*[ ]%2d%*[ ]%2d%*[ ]%2d", &sat[0], &svn,
+                             &yr, &mn, &dd, &hr, &mi, &isec);
+
+                if (irc < 8)
+                {
+                    t_gcoder::_consume(recsize);
+                    recsize = consume = 0;
+                    continue;
+                }
+                prn = t_gsys::eval_sat(svn, t_gsys::char2gsys(sat[0]));
+                sec = isec;
+            }
+            else
+            {
+                if (_decode_v4_non_eph(s_nav_type, sat_id, msg_type, recsize, consume) < 0)
+                {
+                    break;
+                }
+                continue;
+            }
+        }
 
         shared_ptr<t_gnav> geph = make_shared<t_gnav>(_spdlog);
 
         if (prn[0] == 'G')
         {
-            maxrec = MAX_RINEXN_REC_GPS;
+            if (msg_type_str == "CNAV") {
+                maxrec = MAX_RINEXN_REC_GPS_CNAV;
+            } else if (msg_type_str == "CNV2") {
+                maxrec = MAX_RINEXN_REC_GPS_CNV2;
+            } else {
+                maxrec = MAX_RINEXN_REC_GPS;
+            }
             geph = make_shared<t_gnavgps>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS);
         }
         else if (prn[0] == 'R')
         {
-            maxrec = MAX_RINEXN_REC_GLO;
+            if (msg_type_str == "L1OC") {
+                maxrec = MAX_RINEXN_REC_GLO_L1OC;
+            } else if (msg_type_str == "L3OC") {
+                maxrec = MAX_RINEXN_REC_GLO_L3OC;
+            } else {
+                maxrec = MAX_RINEXN_REC_GLO;
+            }
             geph = make_shared<t_gnavglo>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::UTC);
@@ -520,7 +592,13 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
         }
         else if (prn[0] == 'J')
         {
-            maxrec = MAX_RINEXN_REC_QZS;
+            if (msg_type_str == "CNAV") {
+                maxrec = MAX_RINEXN_REC_QZS_CNAV;
+            } else if (msg_type_str == "CNV2") {
+                maxrec = MAX_RINEXN_REC_QZS_CNV2;
+            } else {
+                maxrec = MAX_RINEXN_REC_QZS;
+            }
             geph = make_shared<t_gnavqzs>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS); // QZSS is equal to GPS time
@@ -534,14 +612,26 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
         }
         else if (prn[0] == 'C')
         {
-            maxrec = MAX_RINEXN_REC_BDS;
+            if (msg_type_str == "CNV1") {
+                maxrec = MAX_RINEXN_REC_BDS_CNV1;
+            } else if (msg_type_str == "CNV2") {
+                maxrec = MAX_RINEXN_REC_BDS_CNV2;
+            } else if (msg_type_str == "CNV3") {
+                maxrec = MAX_RINEXN_REC_BDS_CNV3;
+            } else {
+                maxrec = MAX_RINEXN_REC_BDS;
+            }
             geph = make_shared<t_gnavbds>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::BDS);
         }
         else if (prn[0] == 'I')
         {
-            maxrec = MAX_RINEXN_REC_IRN;
+            if(msg_type_str == "L1NV") {
+                maxrec = MAX_RINEXN_REC_IRN_L1NV;
+            } else {
+                maxrec = MAX_RINEXN_REC_IRN;
+            }
             geph = make_shared<t_gnavirn>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS); // ??
@@ -626,6 +716,23 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
                     if (_spdlog)
                         SPDLOG_LOGGER_DEBUG(_spdlog, "skip " + prn + " " + epoch.str_ymdhms());
                     break;
+                }
+                // only process default EPH for RINEX v4, but allow all for other versions (for backward compatibility)
+                if (_version[0] == '4')
+                {
+                    bool allowed = false;
+                    if (prn[0] == 'G' && msg_type_str == "LNAV") allowed = true;
+                    else if (prn[0] == 'E' && (msg_type_str == "INAV" || msg_type_str == "FNAV")) allowed = true;
+                    else if (prn[0] == 'R' && msg_type_str == "FDMA") allowed = true;
+                    else if (prn[0] == 'C' && (msg_type_str == "D1" || msg_type_str == "D2")) allowed = true;
+                    else if (prn[0] == 'J' && msg_type_str == "LNAV") allowed = true;
+                    else if (prn[0] == 'I' && msg_type_str == "LNAV") allowed = true;
+                    else if (prn[0] == 'S') allowed = true;
+
+                    if (!allowed)
+                    {
+                        break;
+                    }
                 }
 
                 geph->data2nav(prn, epoch, data);
@@ -756,6 +863,78 @@ bool t_rinexn::_filter_gnav(shared_ptr<t_gnav> geph, const string &prn)
     }
 
     return ret; // ALL OTHER SYSTEMS
+}
+
+int t_rinexn::_decode_v4_non_eph(string nav_type, string sat_id, string msg_type, int &recsize, int &consume)
+{
+    string line;
+    int tmpsize;
+
+    // Read the time line (second line)
+    tmpsize = t_gcoder::_getline(line, recsize);
+    if (tmpsize < 0)
+        return -1;
+
+    consume += tmpsize;
+    recsize += tmpsize;
+
+    int yr, mn, dd, hr, mi;
+    int isec = 0;
+    // other message format "    2025 03 18 01 20 00 BDGA"
+    int irc = sscanf(line.c_str(), "%4d %02d %02d %02d %02d %02d", &yr, &mn, &dd, &hr, &mi, &isec);
+
+    t_gtime epoch;
+    if (irc >= 6)
+    {
+        epoch.tsys(t_gtime::GPS); // Assume GPS time for now
+        epoch.from_ymdhms(yr, mn, dd, hr, mi, isec);
+    }
+
+    // Read up to 6 more lines (7 lines total counting the time line, max 27 data)
+    int s = 4;
+    int l = 19;
+    double data[27] = {0};
+    int data_idx = 0;
+    int lines_read = 0;
+    if (tmpsize < 57 + s)
+    {
+    }
+    else
+    {
+        data[data_idx++] = strSci2dbl(line.substr(19 + s, l));
+        data[data_idx++] = strSci2dbl(line.substr(38 + s, l));
+        data[data_idx++] = strSci2dbl(line.substr(57 + s, l));
+    }
+
+    while (data_idx < 27 && lines_read < 6)
+    {
+        tmpsize = t_gcoder::_getline(line, recsize);
+        if (tmpsize < 0)
+            return -1;
+
+        if (line.size() > 0 && line[0] == '>')
+        {
+            // Reached next block safely
+            break;
+        }
+
+        consume += tmpsize;
+        recsize += tmpsize;
+        lines_read++;
+
+        if (tmpsize > s)
+            data[data_idx++] = strSci2dbl(line.substr(s, l));
+        if (tmpsize > 19 + s && data_idx < 39)
+            data[data_idx++] = strSci2dbl(line.substr(19 + s, l));
+        if (tmpsize > 38 + s && data_idx < 39)
+            data[data_idx++] = strSci2dbl(line.substr(38 + s, l));
+        if (tmpsize > 57 + s && data_idx < 39)
+            data[data_idx++] = strSci2dbl(line.substr(57 + s, l));
+    }
+
+    t_gcoder::_consume(recsize);
+    recsize = 0;
+    return 0;
 }
 
 } // namespace gnut

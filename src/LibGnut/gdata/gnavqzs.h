@@ -29,6 +29,8 @@
 #include "gutils/gcommon.h"
 
 #define MAX_RINEXN_REC_QZS 29
+#define MAX_RINEXN_REC_QZS_CNAV 34
+#define MAX_RINEXN_REC_QZS_CNV2 36
 
 using namespace std;
 

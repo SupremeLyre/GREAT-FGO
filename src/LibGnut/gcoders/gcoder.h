@@ -29,7 +29,6 @@
 #include <boost/thread/mutex.hpp>
 #endif
 
-#include "gio/gio.h"
 #include "gio/gnote.h"
 #include "gdata/gdata.h"
 #include "gutils/gsys.h"

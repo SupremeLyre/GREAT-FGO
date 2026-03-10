@@ -27,6 +27,7 @@
 #include "gutils/gcommon.h"
 
 #define MAX_RINEXN_REC_IRN 28
+#define MAX_RINEXN_REC_IRN_L1NV 32
 #define SYS_IRN 'I'
 
 using namespace std;
