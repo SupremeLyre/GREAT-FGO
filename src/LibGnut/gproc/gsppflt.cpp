@@ -1700,6 +1700,7 @@ namespace gnut
     {
         if (_data.size() == 0)
             return;
+        _param.reIndex();
         bool obsGps = false;
         bool obsGlo = false;
         bool obsGal = false;

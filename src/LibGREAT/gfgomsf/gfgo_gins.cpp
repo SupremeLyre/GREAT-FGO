@@ -13,6 +13,7 @@
 #include "gfactor/carrierphase_DD_integration_factor.h"
 #include "gfactor/ginitial_bias_factor.h"
 #include "gfactor/ginitial_pose_factor.h"
+#include "gfactor/gpose_local_parameterization.h"
 #include "gfactor/pseudorange_DD_integration_factor.h"
 #include "gfgo/gutility.h"
 #include "gset/gsetsensors.h"
@@ -960,8 +961,8 @@ void gfgomsf::t_gfgo_gins::_gins_optimization()
         //			}
         //		}
         //		map<t_gtime, pair<Eigen::Vector3d, Eigen::Quaterniond>>::const_iterator it_pose =
-        //_map_pose.find(it->first); 		Eigen::Vector3d pos = it_pose->second.first; 		Eigen::Quaterniond quat =
-        //it_pose->second.second; 		InitialPoseFactor* pose_factor = new InitialPoseFactor(pos, quat);
+        //_map_pose.find(it->first); 		Eigen::Vector3d pos = it_pose->second.first; 		Eigen::Quaterniond quat
+        //= it_pose->second.second; 		InitialPoseFactor* pose_factor = new InitialPoseFactor(pos, quat);
         //		pose_factor->sqrt_info = 1e4 * Eigen::Matrix<double, 6, 6>::Identity();
         //		//ceres::CostFunction* pose_factor = PoseError::Create(pos.x(), pos.y(), pos.z(),
         //		//	quat.w(), quat.x(), quat.y(), quat.z(), 1e-6, 1e-9);
