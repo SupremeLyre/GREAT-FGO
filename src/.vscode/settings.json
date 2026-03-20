@@ -9,8 +9,10 @@
             // "xml/GREAT_PPP_0318.xml",
             // "xml/GREAT_MSF_TCPPP_0318.xml",
             // "xml/GREAT_MSF_PPP_1011.xml",
-            "GREAT_PPPFLT132.xml",
+            // "GREAT_PPPFLT132.xml",
             // "xml/great-pvt-ins-adis-tcrtk-mc-odo.xml",
+            "xml/GREAT_PPPFLT_kinematic_DF_Fixed.xml",
+            // "xml/GREAT_PPPFLT_kinematic_DF_Float.xml"
         ],
         // "cwd": "${workspaceFolder}/../sample_data/FGO_20250928",
         // "cwd": "${workspaceFolder}/../sample_data/FGO_20211012",
@@ -19,7 +21,8 @@
         // "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2023305",
         // "cwd": "${workspaceFolder}/../sample_data/MSF_20211012",
         // "cwd": "${workspaceFolder}/../sample_data/MSF_20211013",
-        "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2024132",
+        // "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2024132",
+        "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2026048",
     },
     "ROS2.distro": "jazzy",
     "python.autoComplete.extraPaths": [

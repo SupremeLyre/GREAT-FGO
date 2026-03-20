@@ -1836,7 +1836,12 @@ bool t_gpvtflt::_getSatRef()
                     continue;
             }
 
-            if (_crt_ele[params_ALL[i].prn] < 15 || (_epoch - params_ALL[i].beg <= 0))
+            if (_upd_mode == UPD_MODE::OSB)
+            {
+                // For OSB, we also check if OSB products exist? Or at least we bypass some restriction.
+            }
+
+            if (_crt_ele[params_ALL[i].prn] < 15 || (_upd_mode != UPD_MODE::OSB && _epoch - params_ALL[i].beg <= 0))
                 continue;
 
             double temp = (_epoch - params_ALL[i].beg + 1) * _crt_ele[params_ALL[i].prn];

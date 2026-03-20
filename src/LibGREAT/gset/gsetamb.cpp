@@ -199,6 +199,10 @@ namespace great
         {
             return UPD_MODE::UPD;
         }
+        else if (str == "OSB" || str == "osb")
+        {
+            return UPD_MODE::OSB;
+        }
         else
         {
             spdlog::warn("warning: not defined upd mode[" + str + "]");

@@ -592,7 +592,7 @@ namespace gnut
         return 0;
     }
 
-    void t_sinex::_add_data(string id, t_gdata *pt_data)
+    void t_sinex::_add_data(const string &id, t_gdata *pt_data)
     {
 
         if (pt_data == 0)

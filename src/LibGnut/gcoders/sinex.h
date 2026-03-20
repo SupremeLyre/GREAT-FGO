@@ -116,7 +116,7 @@ namespace gnut
          * @param id 
          * @param pt_data 
          */
-        virtual void _add_data(string id, t_gdata *pt_data); 
+        virtual void _add_data(const string &id, t_gdata *pt_data); 
 
         /**
          * @brief decode head

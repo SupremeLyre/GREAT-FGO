@@ -83,7 +83,7 @@ namespace gnut
         * @param[in]  pt_data    ALLBIAS data
         * @return void
         */
-        virtual void _add_data(string id, t_gdata *pt_data);
+        virtual void _add_data(const string &id, t_gdata *pt_data);
 
         t_gallbias *_allbias; ///< 
     };

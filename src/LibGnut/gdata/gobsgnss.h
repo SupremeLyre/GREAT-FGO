@@ -297,6 +297,15 @@ namespace gnut
         bool apply_code_phase_bias(t_gallbias *allbias);
 
         /**
+         * @brief apply osb
+         * 
+         * @param allbias 
+         * @return true 
+         * @return false 
+         */
+        bool apply_osb(t_gallbias *allbias);
+
+        /**
          * @brief apply dcb
          * 
          * @param allbias 

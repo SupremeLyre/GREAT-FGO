@@ -105,6 +105,12 @@ namespace gnut
         */
         string get_used_ac();
 
+        /**
+        * @brief check if OSB.
+        * @return true if has OSB products
+        */
+        bool has_osb() const { return _has_osb; }
+        void set_osb(bool b) { _has_osb = b; }
 
     protected:
         /**
@@ -175,6 +181,7 @@ namespace gnut
         int _udbiaInt = 99999;     ///< flag of undifferentiated bia
         bool _isOverWrite = false; ///< flag of overwrite
         bool _isOrdered = false;   ///< if AC is ordered
+        bool _has_osb = false;     ///< whether contains OSB products
         t_map_ac _mapBias;         ///< map of all satellite biases (all ACs & all period & all objects)
     };
 
