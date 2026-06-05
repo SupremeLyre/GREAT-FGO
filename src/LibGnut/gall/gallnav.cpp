@@ -278,7 +278,7 @@ namespace gnut
         {
             add = true;
         } // non-existent
-        else if (nav->id_type() == t_gdata::EPHGAL)
+        else if (nav->id_type() == t_gdata::EPHGAL || nav->id_type() == t_gdata::EPHBDS)
         { // check nav-type
             auto itB = _mapsat[sat].lower_bound(ep);
             auto itE = _mapsat[sat].upper_bound(ep);

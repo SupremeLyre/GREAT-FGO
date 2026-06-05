@@ -31,6 +31,9 @@ namespace gnut
         _leapsec = 0;
 
         _comment.clear();
+        _ts_corr.clear();
+        _io_corr.clear();
+        _rnx4_navmsg.clear();
     }
 
     string tsys_corr2str(TSYS_CORR c)
@@ -55,6 +58,14 @@ namespace gnut
             return "QZUT";
         case TS_BDUT:
             return "BDUT";
+        case TS_BDGP:
+            return "BDGP";
+        case TS_BDGA:
+            return "BDGA";
+        case TS_BDGL:
+            return "BDGL";
+        case TS_GAGP:
+            return "GAGP";
         case TS_IRUT:
             return "IRUT";
         case TS_IRGP:
@@ -113,6 +124,14 @@ namespace gnut
             return TS_QZUT;
         else if (s.compare("BDUT") == 0)
             return TS_BDUT;
+        else if (s.compare("BDGP") == 0)
+            return TS_BDGP;
+        else if (s.compare("BDGA") == 0)
+            return TS_BDGA;
+        else if (s.compare("BDGL") == 0)
+            return TS_BDGL;
+        else if (s.compare("GAGP") == 0)
+            return TS_GAGP;
         else if (s.compare("IRUT") == 0)
             return TS_IRUT;
         else if (s.compare("IRGP") == 0)
@@ -197,6 +216,11 @@ namespace gnut
         {
             _io_corr[c] = io;
         }
+    }
+
+    void t_rxnhdr::rinex4_navmsg(const t_rinex4_navmsg &msg)
+    {
+        _rnx4_navmsg.push_back(msg);
     }
 
     ostream &operator<<(ostream &os, const t_rxnhdr &x)

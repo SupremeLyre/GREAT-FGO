@@ -150,6 +150,14 @@ namespace gnut
     {
         _gmutex.lock();
         set<string> tmp = t_gsetbase::_setval(_gsys(gsys), "nav");
+        string attr = _doc.child(XMLKEY_ROOT).child(_gsys(gsys).c_str()).attribute("nav").value();
+        istringstream is(attr);
+        string word;
+        while (is >> word)
+        {
+            transform(word.begin(), word.end(), word.begin(), ::toupper);
+            tmp.insert(word);
+        }
         if (def && tmp.size() == 0)
             tmp = GNSS_GNAV()[gsys];
 
@@ -636,6 +644,7 @@ namespace gnut
 
         cerr << " <gps>            \t\t  <!-- any GNSS constellation: GPS GLO GAL BDS SBS QZS -->\n"
              << "   <sat>  </sat>  \t\t  <!-- list of GPS satellites: G01 G02 .. or empty(ALL) -->\n"
+             << "   <nav>  </nav>  \t\t  <!-- list of navigation messages: NAV CNAV D1 D2 CNV1 CNV2 CNV3 .. or empty(ALL) -->\n"
              << "   <type> </type> \t\t  <!-- list of GPS  obs types: C L D S P or empty(ALL)  -->\n"
              << "   <band> </band> \t\t  <!-- list of GPS  obs bands: 1 2 5 or empty(ALL) -->\n"
              << "   <attr> </attr> \t\t  <!-- list of PGS attributes: A B C D I L M N P Q S W X Y Z or empty(ALL) -->\n"
@@ -643,6 +652,7 @@ namespace gnut
 
         cerr << " <glo>            \t\t  <!-- any GNSS constellation: GPS GLO GAL BDS SBS QZS -->\n"
              << "   <sat>  </sat>  \t\t  <!-- list of GPS satellites: R01 R02 .. or empty(ALL) -->\n"
+             << "   <nav>  </nav>  \t\t  <!-- list of navigation messages: NAV CNAV FDMA L1OC L3OC .. or empty(ALL) -->\n"
              << "   <type> </type> \t\t  <!-- list of GPS  obs types: C L D S P or empty(ALL)  -->\n"
              << "   <band> </band> \t\t  <!-- list of GPS  obs bands: 1 2 3 or empty(ALL) -->\n"
              << "   <attr> </attr> \t\t  <!-- list of PGS attributes: A B C D I L M N P Q S W X Y Z or empty(ALL) -->\n"

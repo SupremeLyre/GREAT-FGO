@@ -25,6 +25,7 @@ namespace gnut
 
     t_gnavbds::t_gnavbds()
         : t_gnav(),
+          _gnavtype(NAV),
           _iode(0),
           _iodc(0),
           _health(0),
@@ -40,6 +41,8 @@ namespace gnut
           _OMG(0.0),
           _OMGDOT(0.0),
           _dn(0.0),
+          _adot(0.0),
+          _dndot(0.0),
           _crc(0.0),
           _cic(0.0),
           _cuc(0.0),
@@ -58,6 +61,7 @@ namespace gnut
 
     t_gnavbds::t_gnavbds(t_spdlog spdlog)
         : t_gnav(spdlog),
+          _gnavtype(NAV),
           _iode(0),
           _iodc(0),
           _health(0),
@@ -73,6 +77,8 @@ namespace gnut
           _OMG(0.0),
           _OMGDOT(0.0),
           _dn(0.0),
+          _adot(0.0),
+          _dndot(0.0),
           _crc(0.0),
           _cic(0.0),
           _cuc(0.0),
@@ -233,10 +239,7 @@ namespace gnut
         }
 
         int sod_frac = _toc.sod() % 3600;
-        if (sod_frac == 0)
-        {
-        }
-        else
+        if ((_gnavtype == NAV || _gnavtype == GNAV_D1 || _gnavtype == GNAV_D2) && sod_frac != 0)
         {
             msg.insert("Issue: " + _sat + " nav unexpected [toc] " + _toc.str_ymdhms());
             _validity = false;
@@ -307,8 +310,9 @@ namespace gnut
             Tk += 604800.0;
         } // check the correct week
 
+        double A = _semi_major_axis(Tk);
         double Ek, dEk;
-        _ecc_anomaly(Tk, Ek, dEk); // eccentric anomaly and its derivative
+        _ecc_anomaly(Tk, A, Ek, dEk); // eccentric anomaly and its derivative
 
         double V = atan2(sqrt(1.0 - pow(_e, 2.0)) * sin(Ek),
                          cos(Ek) - _e); // true anomaly
@@ -317,7 +321,7 @@ namespace gnut
         double sin2U = sin(2 * U0);
         double cos2U = cos(2 * U0);
 
-        double Rk = _a * (1.0 - _e * cos(Ek)); // radius
+        double Rk = A * (1.0 - _e * cos(Ek)); // radius
         double Uk = U0;                        // argument of latitude
         double Ik = _i + _idot * Tk;           // inclination
 
@@ -372,15 +376,12 @@ namespace gnut
         // velocities
         if (vel)
         {
-            double n = _mean_motion();
-
             double tanv2 = tan(V / 2);
-            double dEdM = 1 / (1 - _e * cos(Ek));
-            double dotv = sqrt((1.0 + _e) / (1.0 - _e)) / cos(Ek / 2) / cos(Ek / 2) / (1 + tanv2 * tanv2) * dEdM * n;
+            double dotv = sqrt((1.0 + _e) / (1.0 - _e)) / cos(Ek / 2) / cos(Ek / 2) / (1 + tanv2 * tanv2) * dEk;
             double dotu = dotv + (-_cuc * sin2U + _cus * cos2U) * 2 * dotv;
             double dotom = _OMGDOT - OMGE_DOT_BDS;
             double doti = _idot + (-_cic * sin2U + _cis * cos2U) * 2 * dotv;
-            double dotr = _a * _e * sin(Ek) * dEdM * n + (-_crc * sin2U + _crs * cos2U) * 2 * dotv;
+            double dotr = (_cnav() ? _adot : 0.0) * (1.0 - _e * cos(Ek)) + A * _e * sin(Ek) * dEk + (-_crc * sin2U + _crs * cos2U) * 2 * dotv;
             double dotx = dotr * cosU - Rk * sinU * dotu;
             double doty = dotr * sinU + Rk * cosU * dotu;
 
@@ -444,13 +445,24 @@ namespace gnut
             Tk += 604800.0;
         } // check the correct BDS week
 
+        double TkOrb = t.diff(_toe);
+        while (TkOrb > 302400.0)
+        {
+            TkOrb -= 604800.0;
+        }
+        while (TkOrb < -302400.0)
+        {
+            TkOrb += 604800.0;
+        }
+
+        double A = _semi_major_axis(TkOrb);
         double Ek, dEk;
-        _ecc_anomaly(Tk, Ek, dEk); // eccentric anomaly
+        _ecc_anomaly(TkOrb, A, Ek, dEk); // eccentric anomaly
 
         // SV time correction (including periodic relativity correction)
 
         // NOT CORRECTED FOR 2nd-order relativistic effect - at user side
-        _rel = 4.442807633e-10 * sqrt(_a) * _e * sin(Ek);
+        _rel = 4.442807633e-10 * sqrt(A) * _e * sin(Ek);
         *clk = _f0 + Tk * _f1 + Tk * Tk * _f2;
 
         // check impossible clock correction
@@ -558,6 +570,8 @@ namespace gnut
         _OMGDOT = data[18];
         _omega = data[17];
         _dn = data[5];
+        _adot = data[29];
+        _dndot = data[30];
 
         _crs = data[4];
         _cus = data[9];
@@ -611,6 +625,8 @@ namespace gnut
         data[26] = _tgd[1];
         data[27] = _tot.sow(); //-CORRECT_BDS;
         data[28] = _iodc;
+        data[29] = _adot;
+        data[30] = _dndot;
 
         while (data[27] < 0)
         {
@@ -751,37 +767,65 @@ namespace gnut
         return false;
     }
 
-    double t_gnavbds::_mean_motion()
+    double t_gnavbds::_mean_motion() const
     {
 
-        double n0 = sqrt(GM_CGCS / (pow(_a, 3.0))); // computed mean motion [rad/sec]
+        double n0 = sqrt(GM_CGCS / (pow(_a, 3.0))); // computed mean motion at reference epoch [rad/sec]
         double n = n0 + _dn;                        // corrected mean motion
 
         return n;
     }
 
-    void t_gnavbds::_ecc_anomaly(double dt, double &Ek, double &dEk)
+    double t_gnavbds::_semi_major_axis(double dt) const
+    {
+        double a = _a + (_cnav() ? _adot * dt : 0.0);
+        return a > 0.0 ? a : _a;
+    }
+
+    double t_gnavbds::_mean_anomaly(double dt) const
+    {
+        return _m + _mean_motion() * dt + (_cnav() ? 0.5 * _dndot * dt * dt : 0.0);
+    }
+
+    bool t_gnavbds::_cnav() const
+    {
+        return _gnavtype == GNAV_CNV1 || _gnavtype == GNAV_CNV2 || _gnavtype == GNAV_CNV3;
+    }
+
+    void t_gnavbds::_ecc_anomaly(double dt, double semi_major_axis, double &Ek, double &dEk)
     {
 
-        double n = _mean_motion(); // eccentric anomaly
-        double Mk = _m + n * dt;   // mean anomaly
+        double Mk = _mean_anomaly(dt); // mean anomaly
 
         Ek = Mk;
-        dEk = n;
-        for (double E = 0; fabs(Ek - E) * _a > 0.001;)
+        for (double E = 0; fabs(Ek - E) * semi_major_axis > 0.001;)
         {
             E = Ek;
-            Ek = Mk + _e * sin(E);        // kepler equation for eccentric anomaly [rad]
-            dEk = n + _e * cos(Ek) * dEk; // derivatives w.r.t. time
+            Ek = Mk + _e * sin(E); // kepler equation for eccentric anomaly [rad]
         }
+
+        double mdot = _mean_motion() + (_cnav() ? _dndot * dt : 0.0);
+        dEk = mdot / (1.0 - _e * cos(Ek));
     }
 
     int t_gnavbds::iod() const
     {
 
         _gmutex.lock();
-        int iod = _getIODC();
+        int iod = (_gnavtype == GNAV_CNV1 || _gnavtype == GNAV_CNV2 || _gnavtype == GNAV_CNV3) ? _iodc : _getIODC();
         _gmutex.unlock();
         return iod;
+    }
+
+    GNAVTYPE t_gnavbds::gnavtype(bool full) const
+    {
+        if (!full)
+        {
+            if (_gnavtype == GNAV_CNV1 || _gnavtype == GNAV_CNV2 || _gnavtype == GNAV_CNV3)
+                return CNAV;
+            if (_gnavtype == GNAV_D1 || _gnavtype == GNAV_D2)
+                return NAV;
+        }
+        return _gnavtype;
     }
 } // namespace

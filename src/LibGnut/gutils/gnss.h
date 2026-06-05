@@ -114,6 +114,11 @@ namespace gnut
         INAV_E01,
         INAV_E07,
         CNAV,
+        GNAV_D1,
+        GNAV_D2,
+        GNAV_CNV1,
+        GNAV_CNV2,
+        GNAV_CNV3,
         NAV
     };
 

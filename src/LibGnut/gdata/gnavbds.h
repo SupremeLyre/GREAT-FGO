@@ -28,8 +28,8 @@
 #include "gutils/gtriple.h"
 
 #define MAX_RINEXN_REC_BDS 29
-#define MAX_RINEXN_REC_BDS_CNV1 38
-#define MAX_RINEXN_REC_BDS_CNV2 38
+#define MAX_RINEXN_REC_BDS_CNV1 39
+#define MAX_RINEXN_REC_BDS_CNV2 39
 #define MAX_RINEXN_REC_BDS_CNV3 32
 
 using namespace std;
@@ -108,6 +108,21 @@ namespace gnut
         int iod() const override;
 
         /**
+         * @brief get BDS navigation message type.
+         *
+         * @param full false returns CNAV for CNV1/CNV2/CNV3 and NAV for D1/D2.
+         * @return GNAVTYPE
+         */
+        GNAVTYPE gnavtype(bool full = true) const override;
+
+        /**
+         * @brief set BDS navigation message type.
+         *
+         * @param type
+         */
+        void gnavtype(const GNAVTYPE &type) { _gnavtype = type; }
+
+        /**
          * @brief 
          * 
          * @return int 
@@ -170,14 +185,38 @@ namespace gnut
          * @param Ek 
          * @param dEk 
          */
-        void _ecc_anomaly(double dt, double &Ek, double &dEk);
+        void _ecc_anomaly(double dt, double semi_major_axis, double &Ek, double &dEk);
 
         /**
          * @brief corrected mean motion
          * 
          * @return double 
          */
-        double _mean_motion();
+        double _mean_motion() const;
+
+        /**
+         * @brief semi-major axis at time offset.
+         *
+         * @param dt seconds from Toe
+         * @return double
+         */
+        double _semi_major_axis(double dt) const;
+
+        /**
+         * @brief mean anomaly at time offset.
+         *
+         * @param dt seconds from Toe
+         * @return double
+         */
+        double _mean_anomaly(double dt) const;
+
+        /**
+         * @brief true for BDS CNAV messages with ADOT/DNDOT.
+         *
+         * @return true
+         * @return false
+         */
+        bool _cnav() const;
 
         /**
          * @brief get IODC
@@ -186,6 +225,7 @@ namespace gnut
          */
         const int _getIODC() const;
 
+        GNAVTYPE _gnavtype; ///< BDS navigation message type
         int _iode;      ///< issue of ephemeris
         int _iodc;      ///< issue of clocks
         int _health;    ///< sv health (0:ok)
@@ -201,6 +241,8 @@ namespace gnut
         double _OMG;    ///< longit. of ascend. node at weekly epoch [rad]
         double _OMGDOT; ///< longit. of ascend. node at weekly epoch's change [rad/sec]
         double _dn;     ///< mean motion difference, delta n [rad/sec]
+        double _adot;   ///< semi-major axis change [m/sec]
+        double _dndot;  ///< mean motion difference rate [rad/sec^2]
         double _crc;    ///< amplit. of cos harm. terms - radius [m]
         double _cic;    ///< amplit. of cos harm. terms - inclination [rad]
         double _cuc;    ///< amplit. of cos harm. terms - arg-of-latitude [rad]

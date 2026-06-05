@@ -200,16 +200,6 @@ namespace gnut
             _validity = false;
         }
 
-        int sod_frac = _toc.sod() % 3600;
-        if (sod_frac == 0)
-        {
-        }
-        else
-        {
-            msg.insert("Issue: " + _sat + " nav unexpected [toc] " + _toc.str_ymdhms());
-            _validity = false;
-        }
-
         if (_iode < 0 || 255 < _iode)
         {
             msg.insert("Issue: " + _sat + " nav invalid [iode] " + _toe.str_ymdhms());

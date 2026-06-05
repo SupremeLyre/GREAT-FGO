@@ -77,10 +77,10 @@ namespace gnut
         virtual int _fill_head();
 
         /** @brief filter out navigation mess. types. */
-        bool _filter_gnav(shared_ptr<t_gnav> geph, const string &prn);
+        bool _filter_gnav(shared_ptr<t_gnav> geph, const string &prn, const string &msg_type);
 
         /** @brief decode other RINEX 4 navigation messages (STO, ION, EOP). */
-        int _decode_v4_non_eph(string nav_type, string sat_id, string msg_type, int &recsize, int &consume);
+        int _decode_v4_non_eph(string nav_type, string sat_id, string msg_type, string msg_subtype, int &recsize, int &consume);
 
 
     private:

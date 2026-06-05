@@ -43,6 +43,10 @@ namespace gnut
         TS_QZGP,
         TS_QZUT,
         TS_BDUT,
+        TS_BDGP,
+        TS_BDGA,
+        TS_BDGL,
+        TS_GAGP,
         TS_IRUT,
         TS_IRGP
     };
@@ -76,11 +80,27 @@ namespace gnut
         int T = 0, sat = 0;
     };
 
+    /** @brief RINEX 4 STO/EOP/ION navigation message. */
+    struct t_rinex4_navmsg
+    {
+        string nav_type;
+        string sat;
+        string msg_type;
+        string msg_subtype;
+        string corr_type;
+        string time_ref;
+        t_gtime epoch;
+        vector<double> data;
+    };
+
     /** @brief map system correct. */
     typedef map<TSYS_CORR, t_tsys_corr> t_map_tsys;
 
     /** @brief map iono correct. */
     typedef map<IONO_CORR, t_iono_corr> t_map_iono;
+
+    /** @brief vector of RINEX 4 STO/EOP/ION messages. */
+    typedef vector<t_rinex4_navmsg> t_vec_rinex4_navmsg;
 
     /** @brief convert sys_corr to string. */
     string tsys_corr2str(TSYS_CORR c);
@@ -231,6 +251,13 @@ namespace gnut
         set<IONO_CORR> iono_corr() const; ///< iono correct
 
         /**
+         * @brief RINEX 4 STO/EOP/ION messages.
+         *
+         * @return const t_vec_rinex4_navmsg&
+         */
+        const t_vec_rinex4_navmsg &rinex4_navmsgs() const { return _rnx4_navmsg; }
+
+        /**
          * @brief get sys_corr
          * 
          * @param c 
@@ -263,6 +290,13 @@ namespace gnut
         void iono_corr(const IONO_CORR &c, const t_iono_corr &io); ///< set iono_corr
 
         /**
+         * @brief add RINEX 4 STO/EOP/ION message.
+         *
+         * @param msg
+         */
+        void rinex4_navmsg(const t_rinex4_navmsg &msg); ///< add RINEX 4 non-EPH message
+
+        /**
          * @brief clear
          * 
          */
@@ -288,6 +322,7 @@ namespace gnut
         int _leapsec;            ///< leapseconds since 6-Jan-1980
         t_map_tsys _ts_corr;     ///< RINEX header tsys corrections
         t_map_iono _io_corr;     ///< RINEX header iono corrections
+        t_vec_rinex4_navmsg _rnx4_navmsg; ///< RINEX 4 STO/EOP/ION messages
     };
 
 } // namespace

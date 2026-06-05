@@ -32,9 +32,18 @@ namespace gnut
     {
         _gmutex.lock();
 
+        for (auto it = _headers.begin(); it != _headers.end(); ++it)
+        {
+            if (it->first.compare(path) == 0)
+            {
+                it->second = hdr;
+                _gmutex.unlock();
+                return;
+            }
+        }
+
         t_header_pair pair = make_pair(path, hdr);
         _headers.push_back(pair);
-
         _gmutex.unlock();
     }
 
@@ -52,10 +61,12 @@ namespace gnut
         {
             if (it->first.compare(path) == 0)
             {
-                return it->second;
+                rxnhdr = it->second;
+                break;
             }
         }
 
+        _gmutex.unlock();
         return rxnhdr;
     }
 

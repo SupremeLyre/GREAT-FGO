@@ -51,6 +51,8 @@ namespace gnut
 
         m[QZS] = {(string) "J01", (string) "J02", (string) "J03", (string) "J04", (string) "J05", (string) "J06", (string) "J07"};
 
+        m[IRN] = {(string) "I01", (string) "I02", (string) "I03", (string) "I04", (string) "I05", (string) "I06", (string) "I07", (string) "I08",
+                  (string) "I09", (string) "I10", (string) "I11", (string) "I12", (string) "I13", (string) "I14"};
 
         return m;
     }
@@ -65,6 +67,7 @@ namespace gnut
         m[BDS] = {(string) "NAV"};
         m[SBS] = {(string) "NAV"};
         m[QZS] = {(string) "NAV"};
+        m[IRN] = {(string) "NAV"};
 
         return m;
     }
@@ -2020,6 +2023,16 @@ namespace gnut
             return "INAV_E01";
         case INAV_E07:
             return "INAV_E07";
+        case GNAV_D1:
+            return "D1";
+        case GNAV_D2:
+            return "D2";
+        case GNAV_CNV1:
+            return "CNV1";
+        case GNAV_CNV2:
+            return "CNV2";
+        case GNAV_CNV3:
+            return "CNV3";
         default:
             return "NAV";
         }
@@ -2040,6 +2053,16 @@ namespace gnut
             return INAV_E01;
         else if (s.compare("INAV_E07") == 0)
             return INAV_E07;
+        else if (s.compare("D1") == 0)
+            return GNAV_D1;
+        else if (s.compare("D2") == 0)
+            return GNAV_D2;
+        else if (s.compare("CNV1") == 0)
+            return GNAV_CNV1;
+        else if (s.compare("CNV2") == 0)
+            return GNAV_CNV2;
+        else if (s.compare("CNV3") == 0)
+            return GNAV_CNV3;
 
         return NAV;
     }

@@ -40,6 +40,396 @@ using namespace std;
 namespace gnut
 {
 
+namespace
+{
+
+int _rinex4_eph_rec_count(char sys, const string &msg_type)
+{
+    switch (sys)
+    {
+    case 'G':
+        if (msg_type == "LNAV")
+            return MAX_RINEXN_REC_GPS;
+        if (msg_type == "CNAV")
+            return MAX_RINEXN_REC_GPS_CNAV;
+        if (msg_type == "CNV2")
+            return MAX_RINEXN_REC_GPS_CNV2;
+        break;
+    case 'E':
+        if (msg_type == "INAV" || msg_type == "FNAV")
+            return MAX_RINEXN_REC_GAL;
+        break;
+    case 'R':
+        if (msg_type == "FDMA")
+            return MAX_RINEXN_REC_GLO;
+        if (msg_type == "L1OC")
+            return MAX_RINEXN_REC_GLO_L1OC;
+        if (msg_type == "L3OC")
+            return MAX_RINEXN_REC_GLO_L3OC;
+        break;
+    case 'C':
+        if (msg_type == "D1" || msg_type == "D2")
+            return MAX_RINEXN_REC_BDS;
+        if (msg_type == "CNV1")
+            return MAX_RINEXN_REC_BDS_CNV1;
+        if (msg_type == "CNV2")
+            return MAX_RINEXN_REC_BDS_CNV2;
+        if (msg_type == "CNV3")
+            return MAX_RINEXN_REC_BDS_CNV3;
+        break;
+    case 'J':
+        if (msg_type == "LNAV")
+            return MAX_RINEXN_REC_QZS;
+        if (msg_type == "CNAV")
+            return MAX_RINEXN_REC_QZS_CNAV;
+        if (msg_type == "CNV2")
+            return MAX_RINEXN_REC_QZS_CNV2;
+        break;
+    case 'S':
+        if (msg_type == "SBAS")
+            return MAX_RINEXN_REC_SBS;
+        break;
+    case 'I':
+        if (msg_type == "LNAV")
+            return MAX_RINEXN_REC_IRN;
+        if (msg_type == "L1NV")
+            return MAX_RINEXN_REC_IRN_L1NV;
+        break;
+    default:
+        break;
+    }
+    return -1;
+}
+
+int _rinex4_non_eph_line_count(const string &nav_type, char sys, const string &msg_type, const string &msg_subtype)
+{
+    if (nav_type == "STO")
+        return 2;
+    if (nav_type == "EOP")
+        return 3;
+    if (nav_type != "ION")
+        return -1;
+
+    if (sys == 'I' && msg_type == "L1NV")
+    {
+        if (msg_subtype == "NEQN")
+            return 7;
+        if (msg_subtype == "KLOB")
+            return 4;
+    }
+    if (sys == 'E' && msg_type == "IFNV")
+        return 2;
+    if (sys == 'R')
+        return 1;
+
+    return 3;
+}
+
+void _set_rinex4_epoch_tsys(char sys, t_gtime &epoch)
+{
+    switch (sys)
+    {
+    case 'R':
+        epoch.tsys(t_gtime::UTC);
+        break;
+    case 'E':
+        epoch.tsys(t_gtime::GAL);
+        break;
+    case 'C':
+        epoch.tsys(t_gtime::BDS);
+        break;
+    default:
+        epoch.tsys(t_gtime::GPS);
+        break;
+    }
+}
+
+int _rinex4_week(char sys, const t_gtime &epoch)
+{
+    return sys == 'C' ? epoch.bwk() : epoch.gwk();
+}
+
+bool _rinex4_numeric_field(const string &line, size_t pos, int len, double &value)
+{
+    if (line.size() <= pos)
+        return false;
+
+    string field = trim(line.substr(pos, len));
+    if (field.empty())
+        return false;
+
+    char *end = nullptr;
+    value = strtod(field.c_str(), &end);
+    return end != field.c_str();
+}
+
+void _append_rinex4_values(const string &line, int start, int fields, vector<double> &data)
+{
+    for (int i = 0; i < fields && data.size() < MAX_RINEX4_SEI; ++i)
+    {
+        double value = 0.0;
+        if (_rinex4_numeric_field(line, start + i * 19, 19, value))
+            data.push_back(value);
+    }
+}
+
+bool _rinex4_klobuchar_iono(char sys, const string &msg_type, const string &msg_subtype,
+                            const vector<double> &data, IONO_CORR &alpha, IONO_CORR &beta,
+                            int &alpha_idx, int &beta_idx)
+{
+    alpha_idx = 0;
+    beta_idx = 4;
+
+    if (sys == 'G' && (msg_type == "LNAV" || msg_type == "CNVX"))
+    {
+        alpha = IO_GPSA;
+        beta = IO_GPSB;
+    }
+    else if (sys == 'C' && msg_type == "D1D2")
+    {
+        alpha = IO_BDSA;
+        beta = IO_BDSB;
+    }
+    else if (sys == 'J' && (msg_type == "LNAV" || msg_type == "CNVX"))
+    {
+        alpha = IO_QZSA;
+        beta = IO_QZSB;
+    }
+    else if (sys == 'I' && msg_type == "LNAV")
+    {
+        alpha = IO_IRNA;
+        beta = IO_IRNB;
+    }
+    else if (sys == 'I' && msg_type == "L1NV" && msg_subtype == "KLOB")
+    {
+        alpha = IO_IRNA;
+        beta = IO_IRNB;
+        alpha_idx = 1;
+        beta_idx = 5;
+    }
+    else
+    {
+        return false;
+    }
+
+    return static_cast<int>(data.size()) >= beta_idx + 4;
+}
+
+bool _rinex4_default_nav_message(GSYS gs, const string &msg_type)
+{
+    switch (gs)
+    {
+    case GPS:
+    case QZS:
+    case IRN:
+        return msg_type == "LNAV";
+    case GLO:
+        return msg_type == "FDMA";
+    case BDS:
+        return msg_type == "D1" || msg_type == "D2";
+    case SBS:
+        return msg_type == "SBAS";
+    default:
+        return false;
+    }
+}
+
+bool _rinex4_msg_selected(GSYS gs, const string &msg_type, const set<string> &nav)
+{
+    if (nav.empty() || nav.find(msg_type) != nav.end())
+        return true;
+
+    bool bds_cnav = gs == BDS && (msg_type == "CNV1" || msg_type == "CNV2" || msg_type == "CNV3");
+    if (bds_cnav && (nav.find("CNAV") != nav.end() || nav.find("CNV") != nav.end()))
+        return true;
+
+    bool legacy = _rinex4_default_nav_message(gs, msg_type);
+    if (legacy && nav.find("NAV") != nav.end())
+        return true;
+
+    bool bds_d = gs == BDS && (msg_type == "D1" || msg_type == "D2");
+    if (bds_d && nav.find("D1D2") != nav.end())
+        return true;
+
+    return false;
+}
+
+GNAVTYPE _rinex4_msg_gnavtype(const string &msg_type)
+{
+    if (msg_type == "CNAV")
+        return CNAV;
+    if (msg_type == "D1")
+        return GNAV_D1;
+    if (msg_type == "D2")
+        return GNAV_D2;
+    if (msg_type == "CNV1")
+        return GNAV_CNV1;
+    if (msg_type == "CNV2")
+        return GNAV_CNV2;
+    if (msg_type == "CNV3")
+        return GNAV_CNV3;
+    if (msg_type == "INAV")
+        return INAV;
+    if (msg_type == "FNAV")
+        return FNAV;
+    return NAV;
+}
+
+void _clear_navdata(t_gnavdata &data)
+{
+    for (int i = 0; i < MAX_RINEXN_REC; ++i)
+        data[i] = 0.0;
+}
+
+void _copy_navdata(const t_gnavdata &src, t_gnavdata &dst)
+{
+    for (int i = 0; i < MAX_RINEXN_REC; ++i)
+        dst[i] = src[i];
+}
+
+void _copy_adot_kepler_to_legacy(const t_gnavdata &raw, t_gnavdata &data)
+{
+    data[0] = raw[0];
+    data[1] = raw[1];
+    data[2] = raw[2];
+    data[4] = raw[4];
+    data[5] = raw[5];
+    data[6] = raw[6];
+    data[7] = raw[7];
+    data[8] = raw[8];
+    data[9] = raw[9];
+    data[10] = raw[10];
+    data[11] = raw[11];
+    data[12] = raw[12];
+    data[13] = raw[13];
+    data[14] = raw[14];
+    data[15] = raw[15];
+    data[16] = raw[16];
+    data[17] = raw[17];
+    data[18] = raw[18];
+    data[19] = raw[19];
+}
+
+void _normalize_gps_qzs_cnav(const t_gnavdata &raw, t_gnavdata &data, const t_gtime &epoch, int ttm_idx, int week_idx)
+{
+    _copy_adot_kepler_to_legacy(raw, data);
+    data[21] = raw[week_idx] > 0.0 ? raw[week_idx] : epoch.gwk();
+    data[23] = raw[23]; // URAI_ED, retained as the closest accuracy indicator.
+    data[24] = raw[24];
+    data[25] = raw[25];
+    data[27] = raw[ttm_idx];
+}
+
+void _normalize_bds_cnv12(const t_gnavdata &raw, t_gnavdata &data, const t_gtime &epoch)
+{
+    _copy_adot_kepler_to_legacy(raw, data);
+    data[3] = raw[38];      // IODE
+    data[21] = epoch.bwk(); // CNV1/CNV2 carry full Toc; derive BDT week from it.
+    data[23] = raw[23];     // SISAI_oe, retained as the closest accuracy indicator.
+    data[24] = raw[32];
+    data[25] = raw[29];
+    data[26] = raw[30];
+    data[27] = raw[35];
+    data[28] = raw[34]; // IODC
+    data[29] = raw[3];  // A DOT
+    data[30] = raw[20]; // Delta n0 dot
+}
+
+void _normalize_bds_cnv3(const t_gnavdata &raw, t_gnavdata &data, const t_gtime &epoch)
+{
+    _copy_adot_kepler_to_legacy(raw, data);
+    data[21] = epoch.bwk();
+    data[23] = raw[23]; // SISAI_oe
+    data[24] = raw[28];
+    data[25] = raw[30];
+    data[27] = raw[31];
+    data[29] = raw[3];  // A DOT
+    data[30] = raw[20]; // Delta n0 dot
+}
+
+void _normalize_glo_cdma(const t_gnavdata &raw, t_gnavdata &data, const t_gtime &epoch)
+{
+    data[0] = raw[0];
+    data[1] = raw[1];
+    data[2] = raw[34] > 0.0 ? raw[34] : epoch.sow();
+
+    data[3] = raw[3];
+    data[4] = raw[4];
+    data[5] = raw[5];
+    data[6] = (raw[6] != 0.0 || raw[10] != 0.0) ? 1.0 : 0.0;
+
+    data[7] = raw[7];
+    data[8] = raw[8];
+    data[9] = raw[9];
+    data[10] = 0.0; // CDMA messages do not carry the FDMA frequency channel.
+
+    data[11] = raw[11];
+    data[12] = raw[12];
+    data[13] = raw[13];
+    data[14] = raw[17]; // AODE (EE), closest analogue to age of operation.
+}
+
+void _normalize_irn_l1nv(const t_gnavdata &raw, t_gnavdata &data, const t_gtime &epoch)
+{
+    data[0] = raw[0];
+    data[1] = raw[1];
+    data[2] = raw[2];
+    data[3] = raw[11]; // IODEC
+    data[4] = raw[4];
+    data[5] = raw[5];
+    data[6] = raw[6];
+    data[7] = raw[7];
+    data[8] = raw[8];
+    data[9] = raw[9];
+    data[10] = raw[10];
+    data[11] = epoch.sow(); // L1NV has no separate Toe field; use Toc per full epoch.
+    data[12] = raw[12];
+    data[13] = raw[13];
+    data[14] = raw[14];
+    data[15] = raw[15];
+    data[16] = raw[16];
+    data[17] = raw[17];
+    data[18] = raw[18];
+    data[19] = raw[19];
+    data[21] = epoch.gwk();
+    data[23] = raw[23];
+    data[24] = raw[24];
+    data[25] = raw[25] != 0.0 ? raw[25] : raw[26];
+    data[26] = raw[11];
+    data[27] = raw[31];
+}
+
+bool _normalize_rinex4_eph(char sys, const string &msg_type, const t_gtime &epoch, t_gnavdata &data)
+{
+    bool map_adot_cnav = (sys == 'G' || sys == 'J') && (msg_type == "CNAV" || msg_type == "CNV2");
+    bool map_bds_cnv12 = sys == 'C' && (msg_type == "CNV1" || msg_type == "CNV2");
+    bool map_bds_cnv3 = sys == 'C' && msg_type == "CNV3";
+    bool map_glo_cdma = sys == 'R' && (msg_type == "L1OC" || msg_type == "L3OC");
+    bool map_irn_l1nv = sys == 'I' && msg_type == "L1NV";
+
+    if (!map_adot_cnav && !map_bds_cnv12 && !map_bds_cnv3 && !map_glo_cdma && !map_irn_l1nv)
+        return true;
+
+    t_gnavdata raw;
+    _copy_navdata(data, raw);
+    _clear_navdata(data);
+
+    if (map_adot_cnav)
+        _normalize_gps_qzs_cnav(raw, data, epoch, msg_type == "CNAV" ? 31 : 33, msg_type == "CNAV" ? 32 : 34);
+    else if (map_bds_cnv12)
+        _normalize_bds_cnv12(raw, data, epoch);
+    else if (map_bds_cnv3)
+        _normalize_bds_cnv3(raw, data, epoch);
+    else if (map_glo_cdma)
+        _normalize_glo_cdma(raw, data, epoch);
+    else if (map_irn_l1nv)
+        _normalize_irn_l1nv(raw, data, epoch);
+
+    return true;
+}
+
+} // namespace
+
 t_rinexn::t_rinexn(t_gsetbase *s, string version, int sz) : t_gcoder(s, version, sz)
 {
     _gnsssys = 'G';
@@ -426,6 +816,7 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
     int tmpsize = 0;
     int recsize = 0;
     string msg_type_str = "";
+    string msg_subtype_str = "";
 
     while ((tmpsize = t_gcoder::_getline(line, 0)) >= 0)
     {
@@ -440,6 +831,8 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
         float sec = 0.0;
         char tmpbuff[83]; // RINEX 2 (80) + RINEX 3 (81)
         int min_sz = 22;  // minimum size to be decoded (timestamp)
+        maxrec = MAX_RINEXN_REC;
+        _clear_navdata(data);
 
         switch (_version[0])
         {
@@ -463,8 +856,9 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
             break; // read buffer
         }
 
-        strncpy(tmpbuff, line.c_str(), min_sz);
-        tmpbuff[line.size()] = '\0';
+        int copy_sz = line.size() < static_cast<size_t>(min_sz) ? static_cast<int>(line.size()) : min_sz;
+        strncpy(tmpbuff, line.c_str(), copy_sz);
+        tmpbuff[copy_sz] = '\0';
 
         if (_version[0] == '2')
         {
@@ -499,26 +893,27 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
         }
         else if (_version[0] == '4')
         {
-            if (line[0] != '>')
+            if (line.empty() || line[0] != '>')
             {
                 t_gcoder::_consume(tmpsize);
                 recsize = consume = 0;
                 continue;
             }
 
-            char nav_type[4];
-            char sat_id[4];
-            char msg_type[5];
-            irc = sscanf(tmpbuff, "> %3s %3s %4s", nav_type, sat_id, msg_type);
-            if (irc < 3)
+            char marker = '\0';
+            string s_nav_type;
+            string sat_id;
+            istringstream hdr(line);
+            hdr >> marker >> s_nav_type >> sat_id >> msg_type_str;
+            if (marker != '>' || s_nav_type.empty() || sat_id.empty() || msg_type_str.empty())
             {
                 t_gcoder::_consume(tmpsize);
                 recsize = consume = 0;
                 continue;
             }
 
-            msg_type_str = string(msg_type);
-            string s_nav_type(nav_type);
+            msg_subtype_str = "";
+            hdr >> msg_subtype_str;
             if (s_nav_type == "EPH")
             {
                 tmpsize = t_gcoder::_getline(line, recsize);
@@ -547,10 +942,12 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
             }
             else
             {
-                if (_decode_v4_non_eph(s_nav_type, sat_id, msg_type, recsize, consume) < 0)
+                int non_eph = _decode_v4_non_eph(s_nav_type, sat_id, msg_type_str, msg_subtype_str, recsize, consume);
+                if (non_eph < 0)
                 {
                     break;
                 }
+                cnt += non_eph;
                 continue;
             }
         }
@@ -559,79 +956,49 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
 
         if (prn[0] == 'G')
         {
-            if (msg_type_str == "CNAV") {
-                maxrec = MAX_RINEXN_REC_GPS_CNAV;
-            } else if (msg_type_str == "CNV2") {
-                maxrec = MAX_RINEXN_REC_GPS_CNV2;
-            } else {
-                maxrec = MAX_RINEXN_REC_GPS;
-            }
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_GPS;
             geph = make_shared<t_gnavgps>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS);
         }
         else if (prn[0] == 'R')
         {
-            if (msg_type_str == "L1OC") {
-                maxrec = MAX_RINEXN_REC_GLO_L1OC;
-            } else if (msg_type_str == "L3OC") {
-                maxrec = MAX_RINEXN_REC_GLO_L3OC;
-            } else {
-                maxrec = MAX_RINEXN_REC_GLO;
-            }
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_GLO;
             geph = make_shared<t_gnavglo>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::UTC);
         }
         else if (prn[0] == 'E')
         {
-            maxrec = MAX_RINEXN_REC_GAL;
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_GAL;
             geph = make_shared<t_gnavgal>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GAL);
         }
         else if (prn[0] == 'J')
         {
-            if (msg_type_str == "CNAV") {
-                maxrec = MAX_RINEXN_REC_QZS_CNAV;
-            } else if (msg_type_str == "CNV2") {
-                maxrec = MAX_RINEXN_REC_QZS_CNV2;
-            } else {
-                maxrec = MAX_RINEXN_REC_QZS;
-            }
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_QZS;
             geph = make_shared<t_gnavqzs>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS); // QZSS is equal to GPS time
         }
         else if (prn[0] == 'S')
         {
-            maxrec = MAX_RINEXN_REC_SBS;
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_SBS;
             geph = make_shared<t_gnavsbs>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS); // SBAS is equal to GPS time
         }
         else if (prn[0] == 'C')
         {
-            if (msg_type_str == "CNV1") {
-                maxrec = MAX_RINEXN_REC_BDS_CNV1;
-            } else if (msg_type_str == "CNV2") {
-                maxrec = MAX_RINEXN_REC_BDS_CNV2;
-            } else if (msg_type_str == "CNV3") {
-                maxrec = MAX_RINEXN_REC_BDS_CNV3;
-            } else {
-                maxrec = MAX_RINEXN_REC_BDS;
-            }
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_BDS;
             geph = make_shared<t_gnavbds>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::BDS);
         }
         else if (prn[0] == 'I')
         {
-            if(msg_type_str == "L1NV") {
-                maxrec = MAX_RINEXN_REC_IRN_L1NV;
-            } else {
-                maxrec = MAX_RINEXN_REC_IRN;
-            }
+            maxrec = (_version[0] == '4') ? _rinex4_eph_rec_count(prn[0], msg_type_str) : MAX_RINEXN_REC_IRN;
             geph = make_shared<t_gnavirn>(_spdlog);
             geph->spdlog(_spdlog);
             epoch.tsys(t_gtime::GPS); // ??
@@ -641,6 +1008,15 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
             string lg("Warning: not supported satellite satellite system: " + prn);
             if (_spdlog)
                 SPDLOG_LOGGER_WARN(_spdlog, lg);
+        }
+
+        if (_version[0] == '4' && maxrec < 0)
+        {
+            if (_spdlog)
+                SPDLOG_LOGGER_WARN(_spdlog, "skip unsupported RINEX 4 EPH message type: " + prn + " " + msg_type_str);
+            t_gcoder::_consume(recsize);
+            recsize = consume = 0;
+            continue;
         }
 
         epoch.from_ymdhms(yr, mn, dd, hr, mi, sec);
@@ -717,23 +1093,11 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
                         SPDLOG_LOGGER_DEBUG(_spdlog, "skip " + prn + " " + epoch.str_ymdhms());
                     break;
                 }
-                // only process default EPH for RINEX v4, but allow all for other versions (for backward compatibility)
-                if (_version[0] == '4')
-                {
-                    bool allowed = false;
-                    if (prn[0] == 'G' && msg_type_str == "LNAV") allowed = true;
-                    else if (prn[0] == 'E' && (msg_type_str == "INAV" || msg_type_str == "FNAV")) allowed = true;
-                    else if (prn[0] == 'R' && msg_type_str == "FDMA") allowed = true;
-                    else if (prn[0] == 'C' && (msg_type_str == "D1" || msg_type_str == "D2")) allowed = true;
-                    else if (prn[0] == 'J' && msg_type_str == "LNAV") allowed = true;
-                    else if (prn[0] == 'I' && msg_type_str == "LNAV") allowed = true;
-                    else if (prn[0] == 'S') allowed = true;
+                if (_version[0] == '4' && !_normalize_rinex4_eph(prn[0], msg_type_str, epoch, data))
+                    break;
 
-                    if (!allowed)
-                    {
-                        break;
-                    }
-                }
+                if (_version[0] == '4' && prn[0] == 'C')
+                    dynamic_pointer_cast<t_gnavbds>(geph)->gnavtype(_rinex4_msg_gnavtype(msg_type_str));
 
                 geph->data2nav(prn, epoch, data);
                 geph->gio(_gio_ptr.lock());
@@ -744,7 +1108,7 @@ int t_rinexn::decode_data(char *buff, int sz, int &cnt, vector<string> &errmsg)
                     _check_dt = geph->epoch();
                 };
 
-                if (!_filter_gnav(geph, prn))
+                if (!_filter_gnav(geph, prn, msg_type_str))
                 {
 
                     if (_spdlog)
@@ -831,14 +1195,19 @@ int t_rinexn::_fill_head()
     return cnt;
 }
 
-bool t_rinexn::_filter_gnav(shared_ptr<t_gnav> geph, const string &prn)
+bool t_rinexn::_filter_gnav(shared_ptr<t_gnav> geph, const string &prn, const string &msg_type)
 {
 
     bool ret = true;
 
     GSYS gs = t_gsys::char2gsys(prn[0]);
+    if (_nav[gs].empty())
+        return true;
 
-    // currently only GALILEO can be filtered!
+    if (_version[0] == '4' && !msg_type.empty())
+        return _rinex4_msg_selected(gs, msg_type, _nav[gs]);
+
+    // Galileo has source-specific INAV/FNAV handling in existing navigation classes.
     if (gs == GAL)
     {
 
@@ -852,7 +1221,7 @@ bool t_rinexn::_filter_gnav(shared_ptr<t_gnav> geph, const string &prn)
             gnav = dynamic_pointer_cast<t_gnavgal>(geph)->gnavtype(true);
         } // exact fit for NAV source
 
-        if (_nav[gs].size() == 0 || _nav[gs].find(gnavtype2str(gnav)) != _nav[gs].end())
+        if (_nav[gs].find(gnavtype2str(gnav)) != _nav[gs].end())
         {
             ret = true;
         }
@@ -861,80 +1230,160 @@ bool t_rinexn::_filter_gnav(shared_ptr<t_gnav> geph, const string &prn)
             ret = false;
         }
     }
+    else if (_nav[gs].find(gnavtype2str(geph->gnavtype(true))) == _nav[gs].end() &&
+             _nav[gs].find(gnavtype2str(geph->gnavtype(false))) == _nav[gs].end())
+    {
+        ret = false;
+    }
 
     return ret; // ALL OTHER SYSTEMS
 }
 
-int t_rinexn::_decode_v4_non_eph(string nav_type, string sat_id, string msg_type, int &recsize, int &consume)
+int t_rinexn::_decode_v4_non_eph(string nav_type, string sat_id, string msg_type, string msg_subtype, int &recsize, int &consume)
 {
     string line;
     int tmpsize;
 
-    // Read the time line (second line)
-    tmpsize = t_gcoder::_getline(line, recsize);
-    if (tmpsize < 0)
-        return -1;
-
-    consume += tmpsize;
-    recsize += tmpsize;
-
-    int yr, mn, dd, hr, mi;
-    int isec = 0;
-    // other message format "    2025 03 18 01 20 00 BDGA"
-    int irc = sscanf(line.c_str(), "%4d %02d %02d %02d %02d %02d", &yr, &mn, &dd, &hr, &mi, &isec);
-
-    t_gtime epoch;
-    if (irc >= 6)
+    char sys = sat_id.empty() ? '\0' : sat_id[0];
+    int expected_lines = _rinex4_non_eph_line_count(nav_type, sys, msg_type, msg_subtype);
+    if (expected_lines < 0)
     {
-        epoch.tsys(t_gtime::GPS); // Assume GPS time for now
-        epoch.from_ymdhms(yr, mn, dd, hr, mi, isec);
+        if (_spdlog)
+            SPDLOG_LOGGER_WARN(_spdlog, "skip unsupported RINEX 4 " + nav_type + " message type: " + sat_id + " " + msg_type + " " + msg_subtype);
+
+        for (int i = 0; i < MAX_RINEX4_SEI; ++i)
+        {
+            tmpsize = t_gcoder::_getline(line, recsize);
+            if (tmpsize < 0 || (!line.empty() && line[0] == '>'))
+                break;
+
+            consume += tmpsize;
+            recsize += tmpsize;
+        }
+        t_gcoder::_consume(recsize);
+        recsize = 0;
+        return 0;
     }
 
-    // Read up to 6 more lines (7 lines total counting the time line, max 27 data)
-    int s = 4;
-    int l = 19;
-    double data[27] = {0};
-    int data_idx = 0;
-    int lines_read = 0;
-    if (tmpsize < 57 + s)
-    {
-    }
-    else
-    {
-        data[data_idx++] = strSci2dbl(line.substr(19 + s, l));
-        data[data_idx++] = strSci2dbl(line.substr(38 + s, l));
-        data[data_idx++] = strSci2dbl(line.substr(57 + s, l));
-    }
+    t_rinex4_navmsg msg;
+    msg.nav_type = nav_type;
+    msg.sat = sat_id;
+    msg.msg_type = msg_type;
+    msg.msg_subtype = msg_subtype;
 
-    while (data_idx < 27 && lines_read < 6)
+    for (int line_idx = 0; line_idx < expected_lines; ++line_idx)
     {
         tmpsize = t_gcoder::_getline(line, recsize);
         if (tmpsize < 0)
             return -1;
 
-        if (line.size() > 0 && line[0] == '>')
-        {
-            // Reached next block safely
-            break;
-        }
-
         consume += tmpsize;
         recsize += tmpsize;
-        lines_read++;
 
-        if (tmpsize > s)
-            data[data_idx++] = strSci2dbl(line.substr(s, l));
-        if (tmpsize > 19 + s && data_idx < 39)
-            data[data_idx++] = strSci2dbl(line.substr(19 + s, l));
-        if (tmpsize > 38 + s && data_idx < 39)
-            data[data_idx++] = strSci2dbl(line.substr(38 + s, l));
-        if (tmpsize > 57 + s && data_idx < 39)
-            data[data_idx++] = strSci2dbl(line.substr(57 + s, l));
+        if (line_idx == 0)
+        {
+            int yr = 0, mn = 0, dd = 0, hr = 0, mi = 0, isec = 0;
+            int irc = sscanf(line.c_str(), "%4d %02d %02d %02d %02d %02d", &yr, &mn, &dd, &hr, &mi, &isec);
+            if (irc < 6)
+            {
+                t_gcoder::_consume(recsize);
+                recsize = 0;
+                return 0;
+            }
+
+            _set_rinex4_epoch_tsys(sys, msg.epoch);
+            msg.epoch.from_ymdhms(yr, mn, dd, hr, mi, isec);
+
+            if (nav_type == "STO")
+            {
+                string tail = line.size() > 23 ? trim(line.substr(23)) : "";
+                istringstream sto_info(tail);
+                sto_info >> msg.corr_type >> msg.time_ref;
+            }
+            else
+            {
+                _append_rinex4_values(line, 23, 3, msg.data);
+            }
+        }
+        else
+        {
+            _append_rinex4_values(line, 4, 4, msg.data);
+        }
     }
+
+    _rxnhdr.rinex4_navmsg(msg);
+
+    if (nav_type == "STO" && msg.data.size() >= 3)
+    {
+        TSYS_CORR TS = str2tsys_corr(msg.corr_type);
+        if (TS != TS_NONE)
+        {
+            t_tsys_corr ts;
+            ts.a0 = msg.data[1];
+            ts.a1 = msg.data[2];
+            ts.T = static_cast<int>(msg.data[0]);
+            ts.W = _rinex4_week(sys, msg.epoch);
+            _rxnhdr.tsys_corr(TS, ts);
+        }
+    }
+    else if (nav_type == "ION")
+    {
+        auto store_iono = [this](IONO_CORR IO, const t_iono_corr &io) {
+            _rxnhdr.iono_corr(IO, io);
+            map<string, t_gdata *>::iterator it = _data.begin();
+            while (it != _data.end())
+            {
+                if (it->second->id_type() == t_gdata::ALLNAV || it->second->id_group() == t_gdata::GRP_EPHEM)
+                    ((t_gallnav *)it->second)->add_iono_corr(IO, io);
+                it++;
+            }
+        };
+
+        IONO_CORR alpha = IO_NONE;
+        IONO_CORR beta = IO_NONE;
+        int alpha_idx = 0;
+        int beta_idx = 0;
+        if (_rinex4_klobuchar_iono(sys, msg_type, msg_subtype, msg.data, alpha, beta, alpha_idx, beta_idx))
+        {
+            t_iono_corr io_alpha;
+            io_alpha.x0 = msg.data[alpha_idx + 0];
+            io_alpha.x1 = msg.data[alpha_idx + 1];
+            io_alpha.x2 = msg.data[alpha_idx + 2];
+            io_alpha.x3 = msg.data[alpha_idx + 3];
+            io_alpha.T = msg.epoch.sow();
+            io_alpha.sat = sat_id.size() > 1 ? str2int(sat_id.substr(1)) : 0;
+            store_iono(alpha, io_alpha);
+
+            t_iono_corr io_beta;
+            io_beta.x0 = msg.data[beta_idx + 0];
+            io_beta.x1 = msg.data[beta_idx + 1];
+            io_beta.x2 = msg.data[beta_idx + 2];
+            io_beta.x3 = msg.data[beta_idx + 3];
+            io_beta.T = msg.epoch.sow();
+            io_beta.sat = io_alpha.sat;
+            store_iono(beta, io_beta);
+        }
+        else if (sys == 'E' && msg_type == "IFNV" && msg.data.size() >= 3)
+        {
+            t_iono_corr io;
+            io.x0 = msg.data[0];
+            io.x1 = msg.data[1];
+            io.x2 = msg.data[2];
+            io.x3 = msg.data.size() > 3 ? msg.data[3] : 0.0;
+            io.T = msg.epoch.sow();
+            io.sat = sat_id.size() > 1 ? str2int(sat_id.substr(1)) : 0;
+            store_iono(IO_GAL, io);
+        }
+    }
+
+    if (_spdlog)
+        SPDLOG_LOGGER_DEBUG(_spdlog, "RINEX 4 " + nav_type + " " + sat_id + " " + msg_type + " " + msg_subtype + " " + base_name(_fname));
+
+    _fill_head();
 
     t_gcoder::_consume(recsize);
     recsize = 0;
-    return 0;
+    return 1;
 }
 
 } // namespace gnut
