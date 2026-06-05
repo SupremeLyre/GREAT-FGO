@@ -5,3 +5,6 @@
 /sample_data/MSF_*
 /sample_data/PPPFLT_*
 .marscode/
+.cache/
+__pycache__/
+results/

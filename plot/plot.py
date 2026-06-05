@@ -51,7 +51,7 @@ def plot_position_errors(matched_time, de, dn, du, metrics, file_basename, outpu
     return plot_errors(matched_time, de, dn, du, metrics, file_basename, output_dir,
                        data_type="Position", colors=['red', 'green', 'blue'],
                        labels=['East', 'North', 'Up'], ylabel_suffix="(m)",
-                       ylim=(-1, 1), threshold=0.1)
+                       ylim=(-10, 10), threshold=0.5)
 
 
 def plot_velocity_errors(matched_time, dvx, dvy, dvz, metrics, file_basename, output_dir):

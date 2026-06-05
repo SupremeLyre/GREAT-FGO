@@ -1,7 +1,7 @@
 ERROR STATISTICS SUMMARY
 ========================================
-Data: ..\sample_data\FGO_20211012\result\SEPT-RTK.fgo
-Reference: ..\sample_data\FGO_20211012\ref\groundtruth_1012_GNSS.txt
+Data: ../sample_data/FGO_20211012/result/SEPT-RTK.fgo
+Reference: ../sample_data/FGO_20211012/ref/groundtruth_1012_GNSS.txt
 Epochs: 3646
 ========================================
 

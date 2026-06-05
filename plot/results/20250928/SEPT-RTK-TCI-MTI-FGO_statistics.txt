@@ -1,7 +1,7 @@
 ERROR STATISTICS SUMMARY
 ========================================
-Data: ..\sample_data\FGO_20250928\result\SEPT-RTK-TCI-MTI-FGO.ins
-Reference: ..\sample_data\FGO_20250928\ref\groundtruth_0928_MTI.txt
+Data: ../sample_data/FGO_20250928/result/SEPT-RTK-TCI-MTI-FGO.ins
+Reference: ../sample_data/FGO_20250928/ref/groundtruth_0928_MTI.txt
 Epochs: 902
 ========================================
 

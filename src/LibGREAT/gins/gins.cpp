@@ -608,8 +608,13 @@ void great::t_gsinskf::feedback()
 
     if (_shm._imu_inst_rot)
     {
-        cout << "imu_inst_att: " << fixed << setprecision(10) << setw(15)
-             << t_gbase::q2att(sins.qvb).transpose() / t_gglv::deg << endl;
+        if (_spdlogkf)
+        {
+            SPDLOG_LOGGER_INFO(_spdlogkf, "imu_inst_att: {} {} {}",
+                               t_gbase::q2att(sins.qvb).transpose()[0] / t_gglv::deg,
+                               t_gbase::q2att(sins.qvb).transpose()[1] / t_gglv::deg,
+                               t_gbase::q2att(sins.qvb).transpose()[2] / t_gglv::deg);
+        }
         sins.qvb = sins.qvb - Xk.block(irot, 0, 3, 1);
         sins.Cvb = t_gbase::q2mat(sins.qvb);
         sins.Cbv = sins.Cvb.transpose();
@@ -732,7 +737,7 @@ bool great::t_gsinskf::_ins_init()
                                           dbl2str(angle_tmp(1)) + dbl2str(angle_tmp(2)));
         SPDLOG_LOGGER_INFO(_spdlogkf,
                            "velocity psd(mg/sqrt(Hz)): " + dbl2str(v_tmp(0)) + dbl2str(v_tmp(1)) + dbl2str(v_tmp(2)));
-        SPDLOG_LOGGER_INFO(_spdlogkf, "posotion psd(m/sqrt(h)): " + dbl2str(pos_tmp(0)) + dbl2str(pos_tmp(1)) +
+        SPDLOG_LOGGER_INFO(_spdlogkf, "position psd(m/sqrt(h)): " + dbl2str(pos_tmp(0)) + dbl2str(pos_tmp(1)) +
                                           dbl2str(pos_tmp(2)));
         SPDLOG_LOGGER_INFO(_spdlogkf, "gyro bias psd(deg/h/sqrt(h)): " + dbl2str(eb_tmp(0)) + dbl2str(eb_tmp(1)) +
                                           dbl2str(eb_tmp(2)));
@@ -951,11 +956,13 @@ int great::t_gsinskf::outlier_detect()
     {
         if (v_norm[i] > max_set)
         {
-            cout << v_norm[i] << " " << endl;
-            SPDLOG_LOGGER_INFO(_spdlogkf,
-                               "gintegration: " +
-                                   _ins_crt.str_ymdhms("LC " + meas2str(Flag) + "/INS filter updating Failed (v: " +
-                                                       to_string(v_norm[i]) + ") at epoch : "));
+            if (_spdlogkf)
+            {
+                SPDLOG_LOGGER_INFO(_spdlogkf,
+                                   "gintegration: " +
+                                       _ins_crt.str_ymdhms("LC " + meas2str(Flag) + "/INS filter updating Failed (v: " +
+                                                           to_string(v_norm[i]) + ") at epoch : "));
+            }
             return 1;
         }
     }
