@@ -741,9 +741,21 @@ Eigen::Vector3d great::t_gsetign::NHC_std()
 {
     _gmutex.lock();
     xml_node NHCNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("NHC");
-    double x = NHCNode.child("NoiseSD").attribute("Value").as_double();
+    string str = NHCNode.child("NoiseSD").attribute("Value").value();
+    for (int i = 0; i < str.size(); i++)
+    {
+        if (str[i] == ',')
+            str[i] = ' ';
+    }
+    stringstream ss(str);
+    double x = 0.0, y = 0.0, z = 0.0;
+    ss >> x;
     _gmutex.unlock();
-    return Eigen::Vector3d(x, x, x);
+    if (!(ss >> y))
+        return Eigen::Vector3d(x, x, x);
+    if (!(ss >> z))
+        return Eigen::Vector3d(x, x, y);
+    return Eigen::Vector3d(x, y, z);
 }
 
 Eigen::Vector3d great::t_gsetign::ZUPT_std()

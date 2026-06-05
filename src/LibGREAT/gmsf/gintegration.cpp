@@ -796,7 +796,8 @@ int great::t_gintegration::_getMeas()
     }
     double t = _ins_crt.sow() + _ins_crt.dsec();
     MEAS_TYPE meas_type = meas_state();
-    if (double_eq(fabs(t - int(t)), 0.0))
+    double intv = _shm.ts > 0.0 ? _shm.ts : sins.nts;
+    if (floor(t) != floor(t - intv))
     {
         if (_shm._NHC && meas_type == NHC_MEAS)
             _Meas_Type.insert(NHC_MEAS);
