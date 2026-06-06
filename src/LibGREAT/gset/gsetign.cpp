@@ -11,7 +11,64 @@
 
 #include "gset/gsetign.h"
 
+#include <cstring>
+
 using namespace Eigen;
+
+namespace
+{
+    Eigen::Vector3d parse_vector3d(string str)
+    {
+        for (auto &c : str)
+        {
+            if (c == ',')
+                c = ' ';
+        }
+
+        stringstream ss(str);
+        double x = 0.0, y = 0.0, z = 0.0;
+        if (!(ss >> x))
+            return Eigen::Vector3d::Zero();
+        if (!(ss >> y))
+            y = x;
+        if (!(ss >> z))
+            z = y;
+        return Eigen::Vector3d(x, y, z);
+    }
+
+    pugi::xml_node imu_noise_node(const pugi::xml_document &doc)
+    {
+        pugi::xml_node node = doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("IMUNoise");
+        if (!node)
+            node = doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("imunoise");
+        return node;
+    }
+
+    bool has_attr(const pugi::xml_node &node, const char *name)
+    {
+        return node && node.attribute(name) && strlen(node.attribute(name).value()) > 0;
+    }
+
+    Eigen::Vector3d read_imu_noise_vector(const pugi::xml_node &node, const char *name)
+    {
+        return parse_vector3d(node.attribute(name).value());
+    }
+
+    double read_corrtime_hr(const pugi::xml_node &node)
+    {
+        if (!has_attr(node, "corrtime"))
+            return 0.0;
+        return node.attribute("corrtime").as_double();
+    }
+
+    double corrtime_scale(const pugi::xml_node &node)
+    {
+        double corrtime = read_corrtime_hr(node);
+        if (corrtime <= 0.0)
+            return 1.0;
+        return sqrt(2.0 / corrtime);
+    }
+}
 
 string great::meas2str(MEAS_TYPE type)
 {
@@ -359,18 +416,14 @@ Eigen::Vector3d great::t_gsetign::initial_gyro_std()
     //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("initial_gyro_std").as_double();
     xml_node GyroNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("GyroBias");
     string str = GyroNode.attribute("InitialSTD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (str.empty() && has_attr(noise, "gbstd"))
+        res = read_imu_noise_vector(noise, "gbstd");
     _gmutex.unlock();
     if (_imu_type != IMU_TYPE::Customize)
         return _map_imu_error_models[_imu_type].GyroBiasInitialSTD;
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::initial_gyro_scale_std()
@@ -378,16 +431,12 @@ Eigen::Vector3d great::t_gsetign::initial_gyro_scale_std()
     _gmutex.lock();
     xml_node ExtraStatesNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("ExtraStates");
     string str = ExtraStatesNode.child("IMUScale").child("GyroScale").attribute("InitialSTD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (str.empty() && has_attr(noise, "gsstd"))
+        res = read_imu_noise_vector(noise, "gsstd") * t_gglv::ppm;
     _gmutex.unlock();
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::initial_acce_std()
@@ -396,18 +445,14 @@ Eigen::Vector3d great::t_gsetign::initial_acce_std()
     //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("initial_acce_std").as_double();
     xml_node AcceNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("AcceBias");
     string str = AcceNode.attribute("InitialSTD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (str.empty() && has_attr(noise, "abstd"))
+        res = read_imu_noise_vector(noise, "abstd") * 1.0e-5 / t_gglv::mg;
     _gmutex.unlock();
     if (_imu_type != IMU_TYPE::Customize)
         return _map_imu_error_models[_imu_type].AcceBiasInitialSTD;
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::initial_acce_scale_std()
@@ -415,16 +460,12 @@ Eigen::Vector3d great::t_gsetign::initial_acce_scale_std()
     _gmutex.lock();
     xml_node ExtraStatesNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("ExtraStates");
     string str = ExtraStatesNode.child("IMUScale").child("AcceScale").attribute("InitialSTD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (str.empty() && has_attr(noise, "asstd"))
+        res = read_imu_noise_vector(noise, "asstd") * t_gglv::ppm;
     _gmutex.unlock();
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::initial_imu_installation_att_std()
@@ -547,19 +588,15 @@ Eigen::Vector3d great::t_gsetign::misalignment_psd()
     //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("misalignment_psd").as_double();
     xml_node AttNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("Attitude");
     string str = AttNode.attribute("ProcNoiseSD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (has_attr(noise, "arw"))
+        res = read_imu_noise_vector(noise, "arw");
 
     _gmutex.unlock();
     if (_imu_type != IMU_TYPE::Customize)
         return _map_imu_error_models[_imu_type].AttProcNoisePSD;
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::vel_psd()
@@ -568,18 +605,14 @@ Eigen::Vector3d great::t_gsetign::vel_psd()
     //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("vel_psd").as_double();
     xml_node VelNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("Velocity");
     string str = VelNode.attribute("ProcNoiseSD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (has_attr(noise, "vrw"))
+        res = read_imu_noise_vector(noise, "vrw") / (60.0 * t_gglv::mg);
     _gmutex.unlock();
     if (_imu_type != IMU_TYPE::Customize)
         return _map_imu_error_models[_imu_type].VelProcNoisePSD;
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::pos_psd()
@@ -608,18 +641,14 @@ Eigen::Vector3d great::t_gsetign::gyro_psd()
     //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("gyro_psd").as_double();
     xml_node GyroNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("GyroBias");
     string str = GyroNode.attribute("ProcNoiseSD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (has_attr(noise, "gbstd"))
+        res = read_imu_noise_vector(noise, "gbstd") * corrtime_scale(noise);
     _gmutex.unlock();
     if (_imu_type != IMU_TYPE::Customize)
         return _map_imu_error_models[_imu_type].GyroBiasProcNoisePSD;
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::acce_psd()
@@ -628,18 +657,14 @@ Eigen::Vector3d great::t_gsetign::acce_psd()
     //double x = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).attribute("acce_psd").as_double();
     xml_node AcceNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("Estimator").child("AcceBias");
     string str = AcceNode.attribute("ProcNoiseSD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (has_attr(noise, "abstd"))
+        res = read_imu_noise_vector(noise, "abstd") * 1.0e-5 / t_gglv::mg * corrtime_scale(noise);
     _gmutex.unlock();
     if (_imu_type != IMU_TYPE::Customize)
         return _map_imu_error_models[_imu_type].AcceBiasProcNoisePSD;
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::gyro_scale_psd()
@@ -647,16 +672,12 @@ Eigen::Vector3d great::t_gsetign::gyro_scale_psd()
     _gmutex.lock();
     xml_node ExtraStatesNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("ExtraStates");
     string str = ExtraStatesNode.child("IMUScale").child("GyroScale").attribute("ProcNoiseSD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (has_attr(noise, "gsstd"))
+        res = read_imu_noise_vector(noise, "gsstd") * t_gglv::ppm * corrtime_scale(noise);
     _gmutex.unlock();
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::acce_scale_psd()
@@ -664,16 +685,12 @@ Eigen::Vector3d great::t_gsetign::acce_scale_psd()
     _gmutex.lock();
     xml_node ExtraStatesNode = _doc.child(XMLKEY_ROOT).child(XMLKEY_IGN).child("ExtraStates");
     string str = ExtraStatesNode.child("IMUScale").child("AcceScale").attribute("ProcNoiseSD").value();
-    for (int i = 0; i < str.size(); i++)
-    {
-        if (str[i] == ',')
-            str[i] = ' ';
-    }
-    stringstream ss(str);
-    double X, Y, Z;
-    ss >> X >> Y >> Z;
+    Eigen::Vector3d res = parse_vector3d(str);
+    xml_node noise = imu_noise_node(_doc);
+    if (has_attr(noise, "asstd"))
+        res = read_imu_noise_vector(noise, "asstd") * t_gglv::ppm * corrtime_scale(noise);
     _gmutex.unlock();
-    return Eigen::Vector3d(X, Y, Z);
+    return res;
 }
 
 Eigen::Vector3d great::t_gsetign::imu_inst_trans_psd()
