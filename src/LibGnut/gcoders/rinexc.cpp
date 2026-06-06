@@ -61,11 +61,13 @@ namespace gnut
                 }
                 double ver;
                 ver = str2dbl(_version);
-                if ((tmp[20] != 'C' && ver < 3.04) || (tmp[21] != 'C' && ver == 3.04) || ver > 3.04)
+                bool is_clock_file = (tmp.size() > 20 && tmp[20] == 'C') ||
+                                     (tmp.size() > 21 && tmp[21] == 'C');
+                if (!is_clock_file || ver > 3.04)
                 {
                     string ltmp("warning - not rinex clock data file");
                     if (_spdlog)
-                        SPDLOG_LOGGER_WARN(_spdlog, tmp);
+                        SPDLOG_LOGGER_WARN(_spdlog, "{}: {}", ltmp, tmp);
                     _mutex.unlock();
                     return -1;
                 }

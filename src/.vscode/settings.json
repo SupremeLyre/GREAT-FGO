@@ -15,7 +15,7 @@
             // "xml/GREAT_PPPFLT_kinematic_DF_Fixed.xml",
             // "xml/GREAT_PPPFLT_static_DF_Fixed.xml",
             // "xml/GREAT_PPPFLT_kinematic_DF_Float.xml"
-            "xml/GREAT_MSF_TCRTK_1027_campus_01.xml"
+            // "xml/GREAT_MSF_TCRTK_1027_campus_01.xml"
         ],
         // "cwd": "${workspaceFolder}/../sample_data/FGO_20250928",
         // "cwd": "${workspaceFolder}/../sample_data/FGO_20211012",

@@ -297,6 +297,9 @@ bool gfgomsf::t_gpvtfgo::_get_gdata(const t_gtime &now, vector<t_gsatdata> *data
         }
     }
 
+    bool need_sat_ant_corr = dynamic_cast<t_gsetproc *>(_set)->satellite_pco_correction() ||
+                             dynamic_cast<t_gsetproc *>(_set)->satellite_pcv_correction();
+
     if (_gallobj != nullptr)
     {
         auto it_data = _data.begin();
@@ -313,7 +316,7 @@ bool gfgomsf::t_gpvtfgo::_get_gdata(const t_gtime &now, vector<t_gsatdata> *data
                 }
                 it_data = _data.erase(it_data);
             }
-            else
+            else if (need_sat_ant_corr)
             {
                 shared_ptr<t_gpcv> sat_pcv = sat_obj->pcv(now);
                 if (sat_pcv == nullptr)
@@ -329,6 +332,10 @@ bool gfgomsf::t_gpvtfgo::_get_gdata(const t_gtime &now, vector<t_gsatdata> *data
                     ++it_data;
                 }
             }
+            else
+            {
+                ++it_data;
+            }
         }
 
         if (_isBase && data_base != nullptr)
@@ -343,7 +350,7 @@ bool gfgomsf::t_gpvtfgo::_get_gdata(const t_gtime &now, vector<t_gsatdata> *data
                 {
                     it_base = data_base->erase(it_base);
                 }
-                else
+                else if (need_sat_ant_corr)
                 {
                     shared_ptr<t_gpcv> sat_pcv = sat_obj->pcv(now);
                     if (sat_pcv == nullptr)
@@ -354,6 +361,10 @@ bool gfgomsf::t_gpvtfgo::_get_gdata(const t_gtime &now, vector<t_gsatdata> *data
                     {
                         ++it_base;
                     }
+                }
+                else
+                {
+                    ++it_base;
                 }
             }
         }
@@ -421,16 +432,21 @@ void gfgomsf::t_gpvtfgo::_set_initial_value(const t_gtime &runEpoch)
             iter_cur_prn++;
     }
 
+    bool need_sat_ant_corr = dynamic_cast<t_gsetproc *>(_set)->satellite_pco_correction() ||
+                             dynamic_cast<t_gsetproc *>(_set)->satellite_pcv_correction();
+
     for (auto it : _data)
     {
         string sat_name = it.sat();
-        shared_ptr<t_gobj> sat_obj2 = _gallobj->obj(sat_name);
-        shared_ptr<t_gpcv> sat_pcv2;
-        sat_pcv2 = sat_obj2->pcv(runEpoch);
-        if (sat_pcv2 == nullptr)
+        if (need_sat_ant_corr)
         {
-            cur_sat_prn.erase(sat_name);
-            continue;
+            shared_ptr<t_gobj> sat_obj2 = _gallobj->obj(sat_name);
+            shared_ptr<t_gpcv> sat_pcv2 = (sat_obj2 != nullptr) ? sat_obj2->pcv(runEpoch) : nullptr;
+            if (sat_pcv2 == nullptr)
+            {
+                cur_sat_prn.erase(sat_name);
+                continue;
+            }
         }
         auto it_find = cur_sat_prn.find(sat_name);
 

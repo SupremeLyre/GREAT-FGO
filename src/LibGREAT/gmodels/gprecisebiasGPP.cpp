@@ -219,15 +219,18 @@ namespace great
                 SPDLOG_LOGGER_ERROR(_spdlog, "no navgation data or atx data for epoch " + crt_epo.str_ymdhms());
             return false;
         }
-        shared_ptr<t_gobj> sat_obj2 = _gallobj->obj(_crt_sat);
-        shared_ptr<t_gpcv> sat_pcv2;
-            sat_pcv2 = sat_obj2->pcv(_crt_epo);
+        bool need_sat_ant_corr = _isCalSatPCO || _corrt_sat_pcv;
+        if (need_sat_ant_corr)
+        {
+            shared_ptr<t_gobj> sat_obj2 = _gallobj->obj(_crt_sat);
+            shared_ptr<t_gpcv> sat_pcv2 = (sat_obj2 != nullptr) ? sat_obj2->pcv(_crt_epo) : nullptr;
             if (sat_pcv2 == nullptr)
             {
-				if (_spdlog)
-					SPDLOG_LOGGER_ERROR(_spdlog, "can not get sat pcv in " + crt_epo.str_ymdhms());
+                if (_spdlog)
+                    SPDLOG_LOGGER_ERROR(_spdlog, "can not get sat pcv in " + crt_epo.str_ymdhms());
                 return false;
             }
+        }
         // compute reciver time
         _crt_rec_epo = crt_epo - _crt_rec_clk;
         _crt_obs.addrecTime(_crt_rec_epo);
@@ -258,13 +261,8 @@ namespace great
         shared_ptr<t_gobj> sat_obj = this->_gallobj->obj(_crt_sat);
         shared_ptr<t_gobj> rec_obj = this->_gallobj->obj(_crt_rec);
 
-        shared_ptr<t_gpcv> sat_pcv = (sat_obj != 0) ? sat_obj->pcv(crt_epo) : nullptr;
+        shared_ptr<t_gpcv> sat_pcv = (sat_obj != 0 && _isCalSatPCO) ? sat_obj->pcv(crt_epo) : nullptr;
         shared_ptr<t_gpcv> rec_pcv = (rec_obj != 0) ? rec_obj->pcv(crt_epo) : nullptr;
-
-        if (!_isCalSatPCO)
-        {
-            sat_pcv = nullptr;
-        }
 
         if (sat_pcv) 
         {
@@ -335,13 +333,16 @@ namespace great
         _crt_obs.addazi_rec(azi);
         _crt_obs.addzen_rec((G_PI / 2.0 - ele));
 
-        /// for satellite-side azimuth
-        Matrix _rot_matrix_scf2crs = _RotMatrix_Ant(_crt_obs, _crt_epo, _crt_sat_epo, sat_obj, true);
-        t_gtriple xyz_s2r = t_gtriple(_rot_matrix_scf2crs.t() * ((-1) * xyz_rho.crd_cvect())); // from sat. to rec. in SCF XYZ
-        double azi_sat = atan2(xyz_s2r[0], xyz_s2r[1]);
-        if (azi_sat < 0)
-            azi_sat += 2 * G_PI;
-        _crt_obs.addazi_sat(azi_sat);
+        if (_corrt_sat_pcv)
+        {
+            /// for satellite-side azimuth
+            Matrix _rot_matrix_scf2crs = _RotMatrix_Ant(_crt_obs, _crt_epo, _crt_sat_epo, sat_obj, true);
+            t_gtriple xyz_s2r = t_gtriple(_rot_matrix_scf2crs.t() * ((-1) * xyz_rho.crd_cvect())); // from sat. to rec. in SCF XYZ
+            double azi_sat = atan2(xyz_s2r[0], xyz_s2r[1]);
+            if (azi_sat < 0)
+                azi_sat += 2 * G_PI;
+            _crt_obs.addazi_sat(azi_sat);
+        }
 
         ///add for another elev and azi used in calculating weight matric
         t_gtriple xyz_rh = _trs_sat_crd - _trs_rec_crd;
@@ -386,11 +387,6 @@ namespace great
         _crt_sys = obsdata.gsys();
         _crt_obj = _gallobj->obj(_crt_rec);
         _trs_sat_crd = obsdata.satcrd(); 
-
-        if(!_corrt_sat_pcv)
-        {
-            this->reset_SatPCO(false);
-        }
 
         bool rec_clk_valid = _update_obj_clk_GPP("rec" + _crt_rec, epoch, nav, pars, _crt_rec_clk, _obj_clk);
         bool sat_clk_valid = _update_obj_clk_GPP("sat" + _crt_sat, epoch, nav, pars, _crt_sat_clk, _obj_clk);

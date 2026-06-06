@@ -242,6 +242,8 @@ namespace great
         bool _is_flt = false;       ///< flt or lsq
         bool _corrt_sat_pcv = true; ///< correct sat pcv or not
         bool _corrt_rec_pcv = true; ///< correct rec pcv or not
+        bool _sat_pco_corr = true;  ///< satellite PCO correction config
+        bool _sat_pcv_corr = true;  ///< satellite PCV correction config
         GRDMPFUNC _grad_mf;         ///< grad mf
         shared_ptr<t_gtide> _tide;  ///< tide correction model
 

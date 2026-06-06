@@ -64,6 +64,8 @@ namespace gnut
         _pos_kin = false;
         _frequency = 2;
         _sd_sat = false;
+        _sat_pco_corr = true;
+        _sat_pcv_corr = true;
         _basepos = BASEPOS::SPP;
         _minsat = static_cast<size_t>(6); 
 
@@ -614,6 +616,8 @@ namespace gnut
         _default_node(node, "crd_constr", _crd_est.c_str());
         _default_node(node, "pos_kin", _pos_kin == true ? "true" : "false");
         _default_node(node, "sd_sat", _sd_sat == true ? "true" : "false");
+        _default_node(node, "sat_pco_corr", _sat_pco_corr == true ? "true" : "false");
+        _default_node(node, "sat_pcv_corr", _sat_pcv_corr == true ? "true" : "false");
         _default_node(node, "min_sat", (to_string(_minsat)).c_str());
         _default_node(node, "basepos", basepos2str(_basepos).c_str());
 
@@ -1197,6 +1201,28 @@ namespace gnut
         str_erase(tmp);
         transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper);
         bool tmp_bool = (tmp == "TRUE" ? true : false); 
+        _gmutex.unlock();
+        return tmp_bool;
+    }
+
+    bool t_gsetproc::satellite_pco_correction()
+    {
+        _gmutex.lock();
+        string tmp = _doc.child(XMLKEY_ROOT).child(XMLKEY_PROC).child_value("sat_pco_corr");
+        str_erase(tmp);
+        transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper);
+        bool tmp_bool = (tmp == "FALSE" || tmp == "OFF" || tmp == "NO" || tmp == "0") ? false : true;
+        _gmutex.unlock();
+        return tmp_bool;
+    }
+
+    bool t_gsetproc::satellite_pcv_correction()
+    {
+        _gmutex.lock();
+        string tmp = _doc.child(XMLKEY_ROOT).child(XMLKEY_PROC).child_value("sat_pcv_corr");
+        str_erase(tmp);
+        transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper);
+        bool tmp_bool = (tmp == "FALSE" || tmp == "OFF" || tmp == "NO" || tmp == "0") ? false : true;
         _gmutex.unlock();
         return tmp_bool;
     }

@@ -40,6 +40,11 @@ t_gprecisebias::t_gprecisebias(t_gallproc *data, t_gsetbase *setting) : t_gbiasm
         if (dynamic_cast<t_gsetinp *>(_gset)->input_size("orbit") != 0)
             _corrt_sat_pcv = true;
     }
+    bool sat_ant_corr_available = _corrt_sat_pcv;
+    _sat_pco_corr = dynamic_cast<t_gsetproc *>(setting)->satellite_pco_correction();
+    _sat_pcv_corr = dynamic_cast<t_gsetproc *>(setting)->satellite_pcv_correction();
+    _isCalSatPCO = sat_ant_corr_available && _sat_pco_corr;
+    _corrt_sat_pcv = sat_ant_corr_available && _sat_pcv_corr;
     _gifcb = dynamic_cast<t_gifcb *>((*data)[t_gdata::IFCB]);
     _attitudes = dynamic_cast<t_gsetproc *>(setting)->attitudes();
     _opl = dynamic_cast<t_gallopl *>((*data)[t_gdata::ALLOPL]);
@@ -63,6 +68,11 @@ t_gprecisebias::t_gprecisebias(t_gallproc *data, t_spdlog spdlog, t_gsetbase *se
         if (dynamic_cast<t_gsetinp *>(_gset)->input_size("orbit") != 0)
             _corrt_sat_pcv = true;
     }
+    bool sat_ant_corr_available = _corrt_sat_pcv;
+    _sat_pco_corr = dynamic_cast<t_gsetproc *>(setting)->satellite_pco_correction();
+    _sat_pcv_corr = dynamic_cast<t_gsetproc *>(setting)->satellite_pcv_correction();
+    _isCalSatPCO = sat_ant_corr_available && _sat_pco_corr;
+    _corrt_sat_pcv = sat_ant_corr_available && _sat_pcv_corr;
     _gifcb = dynamic_cast<t_gifcb *>((*data)[t_gdata::IFCB]);
     _attitudes = dynamic_cast<t_gsetproc *>(setting)->attitudes();
     _opl = dynamic_cast<t_gallopl *>((*data)[t_gdata::ALLOPL]);
@@ -596,13 +606,7 @@ double t_gprecisebias::PCV(bool corrt_sat, bool corrt_rec, t_gtime &epoch, t_gti
     shared_ptr<t_gpcv> sat_pcv = (sat_obj != nullptr) ? sat_obj->pcv(epoch) : nullptr;
     shared_ptr<t_gpcv> rec_pcv = (rec_obj != nullptr) ? rec_obj->pcv(epoch) : nullptr;
 
-    if (!_isCalSatPCO)
-    {
-        if (sat_pcv != nullptr)
-            sat_pcv = nullptr;
-    }
-
-    if (sat_pcv != nullptr && corrt_sat)
+    if (sat_pcv != nullptr && _isCalSatPCO)
     {
         // Satellite phase center variation
         // -- Satellite phase center offset
@@ -813,7 +817,10 @@ bool t_gprecisebias::_apply_sat(const t_gtime &rec_epo, t_gtime &sat_epo, t_gall
     // ITERATION
     // compute sat coord(CRS)  clk(estimated) (rewrite in orb model)
     double delay = 0.0;
-    Matrix rot_matrix_sat, rot_matrix_rec;
+    Matrix rot_matrix_sat(3, 3), rot_matrix_rec;
+    rot_matrix_sat << 1 << 0 << 0
+                   << 0 << 1 << 0
+                   << 0 << 0 << 1;
 
     int pv_iod = 0;
     int clk_iod = 0;
@@ -861,27 +868,30 @@ bool t_gprecisebias::_apply_sat(const t_gtime &rec_epo, t_gtime &sat_epo, t_gall
             shared_ptr<t_gpcv> sat_pcv;
             shared_ptr<t_gpcv> rec_pcv;
 
-            if (sat_obj != 0)
+            if (sat_obj != 0 && _isCalSatPCO)
                 sat_pcv = sat_obj->pcv(_crt_epo);
             if (rec_obj != 0)
                 rec_pcv = rec_obj->pcv(_crt_epo);
 
             GOBS_LC lc = LC_L1;
-            if (sat_pcv)
+            if (_isCalSatPCO)
             {
-                // Satellite phase center offset
-                t_gtriple pco(0, 0, 0);
-
-                if (sat_pcv->pcoS(_crt_obs, pco, lc, _band_index[_crt_sys][FREQ_1], _band_index[_crt_sys][FREQ_2]) > 0)
+                if (sat_pcv)
                 {
-                    rot_matrix_sat = _RotMatrix_Ant(_crt_obs, _crt_epo, _crt_sat_epo, sat_obj, false);
-                    t_gtriple dx(rot_matrix_sat * (pco.crd_cvect()));
-                    sat_pcv->pco_proj(pco_S, _crt_obs, _trs_rec_crd, dx);
+                    // Satellite phase center offset
+                    t_gtriple pco(0, 0, 0);
+
+                    if (sat_pcv->pcoS(_crt_obs, pco, lc, _band_index[_crt_sys][FREQ_1], _band_index[_crt_sys][FREQ_2]) > 0)
+                    {
+                        rot_matrix_sat = _RotMatrix_Ant(_crt_obs, _crt_epo, _crt_sat_epo, sat_obj, false);
+                        t_gtriple dx(rot_matrix_sat * (pco.crd_cvect()));
+                        sat_pcv->pco_proj(pco_S, _crt_obs, _trs_rec_crd, dx);
+                    }
                 }
-            }
-            else
-            {
-                return false;
+                else
+                {
+                    return false;
+                }
             }
 
             if (rec_pcv)

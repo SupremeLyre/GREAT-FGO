@@ -31,8 +31,11 @@ namespace gnut
 
         _start.tsys(t_gtime::GPS);
         _lastepo.tsys(t_gtime::GPS);
+        _orbintv = 0;
+        _nepochs = 0;
         _nrecord = -1;
         _nrecmax = -1;
+        _maxsats = 0;
     }
 
     int t_sp3::decode_head(char *buff, int sz, vector<string> &errmsg)
@@ -62,7 +65,8 @@ namespace gnut
             {
                 // first line
                 if (tmp.substr(1, 1) == "a" || // 60-columns
-                    tmp.substr(1, 1) == "c"    // 80-columns
+                    tmp.substr(1, 1) == "c" || // 80-columns
+                    tmp.substr(1, 1) == "d"    // SP3-d
                 )
                 {
 
@@ -243,7 +247,15 @@ namespace gnut
                 }
 
                 int sod = hr * 3600 + mi * 60 + (int)sc;
+                t_gtime last_epoch(_lastepo);
+                bool have_last_epoch = (_nrecord >= 0);
                 _lastepo.from_ymd(yr, mn, dd, sod);
+                if (_orbintv <= 0 && have_last_epoch)
+                {
+                    double interval = fabs(_lastepo - last_epoch);
+                    if (interval > 0.0)
+                        _orbintv = static_cast<long>(interval + 0.5);
+                }
 
                 if (_spdlog)
                     SPDLOG_LOGGER_DEBUG(_spdlog, "reading EPOCH [{}] - {} ", _nrecord, _lastepo.str(" %Y-%m-%d %H:%M:%S"));

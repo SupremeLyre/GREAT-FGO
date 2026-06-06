@@ -1064,6 +1064,8 @@ int great::t_gpvtflt::_preprocess(const string &ssite, vector<t_gsatdata> &sdata
 
     _nSat = sdata.size();
     set<string> sat_rm = dynamic_cast<t_gsetgen *>(_set)->sat_rm();
+    bool need_sat_ant_corr = dynamic_cast<t_gsetproc *>(_set)->satellite_pco_correction() ||
+                             dynamic_cast<t_gsetproc *>(_set)->satellite_pcv_correction();
     while (iter != sdata.end())
     {
         // except sat from config file
@@ -1075,10 +1077,10 @@ int great::t_gpvtflt::_preprocess(const string &ssite, vector<t_gsatdata> &sdata
         }
 
         // except sat without pcv
-        if (!_isBase)
+        if (!_isBase && need_sat_ant_corr)
         {
             shared_ptr<t_gobj> sat_obj = this->_gallobj->obj(satname);
-            shared_ptr<t_gpcv> sat_pcv = sat_obj->pcv(_epoch);
+            shared_ptr<t_gpcv> sat_pcv = (sat_obj != nullptr) ? sat_obj->pcv(_epoch) : nullptr;
             if (!sat_pcv)
             {
                 iter = sdata.erase(iter);
@@ -3380,7 +3382,7 @@ bool great::t_gpvtflt::_check_sat(const string &ssite, t_gsatdata *const iter, M
     if (_satPos(_epoch, *iter) < 0)
     {
         ostringstream str;
-        str << "prepareData: erasing data since _satPos failed, "
+        str << "prepareData: erasing data since _satPos failed (satellite clock/position product unavailable), "
             << "epo: " << _epoch.str_hms() << ", "
             << "prn: " << iter->sat();
         if (_spdlog)

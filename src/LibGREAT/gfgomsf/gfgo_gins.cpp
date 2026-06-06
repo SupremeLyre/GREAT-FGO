@@ -258,6 +258,8 @@ bool gfgomsf::t_gfgo_gins::_time_valid(t_gtime gt, t_gtime inst)
     double crt = inst.sow() + inst.dsec();
     _data.erase(_data.begin(), _data.end());
     t_gtime obsEpo = _gobs->load(_site, crt);
+    bool need_sat_ant_corr = dynamic_cast<t_gsetproc *>(_set)->satellite_pco_correction() ||
+                             dynamic_cast<t_gsetproc *>(_set)->satellite_pcv_correction();
 
     if ((abs(inst.diff(obsEpo)) < _shm.delay && inst >= obsEpo) || abs(inst.diff(obsEpo)) < 1e-6)
     {
@@ -299,7 +301,7 @@ bool gfgomsf::t_gfgo_gins::_time_valid(t_gtime gt, t_gtime inst)
                         }
                         it_data = _data.erase(it_data);
                     }
-                    else
+                    else if (need_sat_ant_corr)
                     {
                         shared_ptr<t_gpcv> sat_pcv = sat_obj->pcv(obsEpo);
                         if (sat_pcv == nullptr)
@@ -314,6 +316,10 @@ bool gfgomsf::t_gfgo_gins::_time_valid(t_gtime gt, t_gtime inst)
                         {
                             ++it_data;
                         }
+                    }
+                    else
+                    {
+                        ++it_data;
                     }
                 }
             }
@@ -357,7 +363,7 @@ bool gfgomsf::t_gfgo_gins::_time_valid(t_gtime gt, t_gtime inst)
                         {
                             it_base = _data_base.erase(it_base);
                         }
-                        else
+                        else if (need_sat_ant_corr)
                         {
                             shared_ptr<t_gpcv> sat_pcv = sat_obj->pcv(obsEpo);
                             if (sat_pcv == nullptr)
@@ -373,6 +379,10 @@ bool gfgomsf::t_gfgo_gins::_time_valid(t_gtime gt, t_gtime inst)
                             {
                                 ++it_base;
                             }
+                        }
+                        else
+                        {
+                            ++it_base;
                         }
                     }
                 }

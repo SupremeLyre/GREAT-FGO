@@ -289,6 +289,12 @@ namespace gnut
         /**@brief bds code bias correction */
         bool bds_code_bias_correction();
 
+        /**@brief satellite PCO correction */
+        bool satellite_pco_correction();
+
+        /**@brief satellite PCV correction */
+        bool satellite_pcv_correction();
+
         /**@brief get receiverType */
         RECEIVERTYPE get_receiverType();
 
@@ -355,6 +361,8 @@ namespace gnut
         int _minsat;                    ///< minimum satellite number
         BASEPOS _basepos;               ///< base position
         bool _sd_sat;                   ///< single differented between sat and sat_ref
+        bool _sat_pco_corr;             ///< satellite PCO correction
+        bool _sat_pcv_corr;             ///< satellite PCV correction
         modeofmeanpole _meanpolemodel;  ///< different mean pole modeling
 
 
