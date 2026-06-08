@@ -7,7 +7,7 @@
             // "xml/GREAT-GINSFGO-TC-RTKINS-1012-urban.xml",
             // "xml/GREAT-PVTFGO-RTK-1012-urban.xml",
             // "xml/GREAT_PPP_0318.xml",
-            "xml/GREAT_MSF_TCPPP_0318.xml",
+            // "xml/GREAT_MSF_TCPPP_0318.xml",
             // "xml/GREAT_MSF_PPP_1011.xml",
             // "GREAT_PPPFLT132.xml",
             // "xml/great-pvt-ins-adis-tcrtk-mc-odo.xml",
@@ -16,10 +16,11 @@
             // "xml/GREAT_PPPFLT_static_DF_Fixed.xml",
             // "xml/GREAT_PPPFLT_kinematic_DF_Float.xml"
             // "xml/GREAT_MSF_TCRTK_1027_campus_01.xml"
+            "xml/GREAT_MSF_TCPPP_0605.xml",
         ],
         // "cwd": "${workspaceFolder}/../sample_data/FGO_20250928",
         // "cwd": "${workspaceFolder}/../sample_data/FGO_20211012",
-        "cwd": "${workspaceFolder}/../sample_data/MSF_20250318",
+        // "cwd": "${workspaceFolder}/../sample_data/MSF_20250318",
         // "cwd": "${workspaceFolder}/../sample_data/MSF_20251011",
         // "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2023305",
         // "cwd": "${workspaceFolder}/../sample_data/MSF_20211012",
@@ -28,6 +29,7 @@
         // "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2026048",
         // "cwd": "${workspaceFolder}/../sample_data/PPPFLT_2026031",
         // "cwd": "${workspaceFolder}/../sample_data/MSF_20201027",
+        "cwd": "${workspaceFolder}/../sample_data/MSF_20260605",
     },
     "ROS2.distro": "jazzy",
     "python.autoComplete.extraPaths": [

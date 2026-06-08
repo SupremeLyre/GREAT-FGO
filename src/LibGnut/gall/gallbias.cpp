@@ -6,6 +6,7 @@
 -*/
 
 #include "gall/gallbias.h"
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <stdlib.h>
@@ -14,6 +15,24 @@ using namespace std;
 
 namespace gnut
 {
+namespace
+{
+GOBS _make_gobs(const char type, const char band, const char attr)
+{
+    string obs;
+    obs.push_back(type);
+    obs.push_back(band);
+    obs.push_back(attr);
+    return str2gobs(obs);
+}
+
+bool _valid_gobs(const GOBS &gobs)
+{
+    return gobs != X;
+}
+
+} // namespace
+
 t_gallbias::t_gallbias() : t_gdata(), _isOverWrite(false)
 {
     id_type(t_gdata::ALLBIAS);
@@ -145,6 +164,23 @@ double t_gallbias::get(const string &prd, const t_gtime &epo, const string &prn,
     return bias;
 }
 
+bool t_gallbias::get_osb(const t_gtime &epo, const string &obj, const GOBS &gobs, double &bias)
+{
+    _gmutex.lock();
+
+    const string ac = _select_ac_unlocked();
+    const bool found = _get_osb_unlocked(ac, epo, obj, gobs, bias);
+
+    _gmutex.unlock();
+    return found;
+}
+
+bool t_gallbias::has_osb(const t_gtime &epo, const string &obj, const GOBS &gobs)
+{
+    double bias = 0.0;
+    return get_osb(epo, obj, gobs, bias);
+}
+
 vector<string> t_gallbias::get_ac()
 {
     vector<string> ac_list;
@@ -185,6 +221,130 @@ string t_gallbias::get_used_ac()
     if (_acUsed.empty())
         _acUsed = get_ac_priority();
     return _acUsed;
+}
+
+string t_gallbias::_select_ac_unlocked(const string &tmp)
+{
+    string ac(tmp);
+    if (ac == "" && _isOrdered == true)
+        ac = _acPri;
+
+    if (ac == "" && _isOrdered == false)
+    {
+        int loc = 999;
+        for (const auto &item : _mapBias)
+        {
+            auto it = _acOrder.find(item.first);
+            int order = (it != _acOrder.end()) ? it->second : 999;
+
+            if (order < loc)
+            {
+                ac = item.first;
+                loc = order;
+            }
+            else if (ac.empty())
+            {
+                ac = item.first;
+            }
+        }
+
+        _isOrdered = true;
+        _acPri = ac;
+    }
+
+    return ac;
+}
+
+bool t_gallbias::_get_osb_unlocked(const string &ac, const t_gtime &epo, const string &obj, const GOBS &gobs, double &bias)
+{
+    if (ac.empty() || obj.empty() || gobs == X)
+        return false;
+
+    t_gobs normalized(gobs);
+    normalized.gobs2to3(t_gsys::char2gsys(obj[0]));
+    GOBS obs = normalized.gobs();
+
+    t_spt_bias exact = _find_exact(ac, epo, obj, obs);
+    if (exact != nullptr)
+    {
+        bias = exact->bias();
+        return true;
+    }
+
+    const string obs_str = gobs2str(obs);
+    if (obs_str.size() < 3)
+        return false;
+
+    const char sys = obj[0];
+    const char type = obs_str[0];
+    const char band = obs_str[1];
+    const char attr = obs_str[2];
+
+    auto exact_bias = [&](const GOBS &candidate, double &value) -> bool {
+        if (!_valid_gobs(candidate) || candidate == obs)
+            return false;
+        t_spt_bias pt = _find_exact(ac, epo, obj, candidate);
+        if (pt == nullptr)
+            return false;
+        value = pt->bias();
+        return true;
+    };
+
+    auto average_bias = [&](const GOBS &candidate1, const GOBS &candidate2, double &value) -> bool {
+        double bias1 = 0.0;
+        double bias2 = 0.0;
+        if (!exact_bias(candidate1, bias1) || !exact_bias(candidate2, bias2))
+            return false;
+        value = 0.5 * (bias1 + bias2);
+        return true;
+    };
+
+    if (type == 'C')
+    {
+        // PRIDE read_bias completes vacant GPS/QZSS composite code OSBs by
+        // averaging their two component tracking attributes. We keep the
+        // product unchanged and synthesize only at lookup time so missing
+        // raw product entries are still detectable by callers.
+        if ((sys == 'G' || sys == 'J') && attr == 'X')
+        {
+            if (band == '1' || band == '2')
+                return average_bias(_make_gobs('C', band, 'S'), _make_gobs('C', band, 'L'), bias);
+            if (band == '5')
+                return average_bias(_make_gobs('C', band, 'I'), _make_gobs('C', band, 'Q'), bias);
+        }
+
+        // PRIDE treats Galileo E6 C and Q code biases as equivalent to X;
+        // if X is absent but C is present, X can also use C. This covers
+        // files that publish only the pilot/data/common tracking attribute.
+        if (sys == 'E')
+        {
+            if (band == '6' && attr == 'X' && exact_bias(C6C, bias))
+                return true;
+            if ((attr == 'C' || attr == 'Q') && exact_bias(_make_gobs('C', band, 'X'), bias))
+                return true;
+        }
+
+        // Keep the historical GREAT fallback for C6X->C6C. It is applied
+        // after the PRIDE rules and only for OSB single-signal lookup.
+        if (obs == C6X && exact_bias(C6C, bias))
+            return true;
+    }
+    else if (type == 'L')
+    {
+        // PRIDE assumes phase OSBs on the same frequency are identical
+        // across signal attributes. This is necessary for AR because phase
+        // products are often sparser than the RINEX observation attributes.
+        const string attrs = "ABCDILMNPQSWXYZ";
+        for (char fallback_attr : attrs)
+        {
+            if (fallback_attr == attr)
+                continue;
+            if (exact_bias(_make_gobs('L', band, fallback_attr), bias))
+                return true;
+        }
+    }
+
+    return false;
 }
 
 double t_gallbias::get(const t_gtime &epo, const string &obj, const GOBS &gobs1, const GOBS &gobs2, const string &tmp)
@@ -288,6 +448,36 @@ t_spt_bias t_gallbias::_find(const string &ac, const t_gtime &epo, const string 
                     {
                         pt_bias = itGOBS->second;
                     }
+                }
+            }
+        }
+    }
+
+    return pt_bias;
+}
+
+t_spt_bias t_gallbias::_find_exact(const string &ac, const t_gtime &epo, const string &obj, const GOBS &gobs)
+{
+    t_spt_bias pt_bias = nullptr;
+
+    auto itAC = _mapBias.find(ac);
+    if (itAC != _mapBias.end())
+    {
+        auto itEPO = itAC->second.upper_bound(epo);
+        if (itEPO != itAC->second.begin() && itEPO != itAC->second.end())
+            itEPO--; // between epochs
+        if (itEPO == itAC->second.end() && itAC->second.size() != 0)
+            itEPO--; // no epochs
+
+        if (itEPO != itAC->second.end())
+        {
+            auto itOBJ = itEPO->second.find(obj);
+            if (itOBJ != itEPO->second.end())
+            {
+                auto itGOBS = itOBJ->second.find(gobs);
+                if (itGOBS != itOBJ->second.end() && itGOBS->second->valid(epo))
+                {
+                    pt_bias = itGOBS->second;
                 }
             }
         }

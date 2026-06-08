@@ -74,6 +74,22 @@ namespace gnut
         double get(const t_gtime &epo, const string &obj, const GOBS &gobs1, const GOBS &gobs2, const string &ac = "");
 
         /**
+        * @brief get one OSB in meters, with PRIDE-PPPAR compatible signal fallback.
+        *
+        * @param[in]  epo       epoch of the data
+        * @param[in]  obj       satellite PRN
+        * @param[in]  gobs      observation signal
+        * @param[out] bias      OSB value in meters
+        * @return true if an applicable OSB is present; false otherwise
+        */
+        bool get_osb(const t_gtime &epo, const string &obj, const GOBS &gobs, double &bias);
+
+        /**
+        * @brief check one OSB presence, using the same fallback as get_osb.
+        */
+        bool has_osb(const t_gtime &epo, const string &obj, const GOBS &gobs);
+
+        /**
         * @brief get single bias element.
         *
         * @param[in]  prd       
@@ -123,6 +139,23 @@ namespace gnut
         * @return    pt bias
         */
         t_spt_bias _find(const string &ac, const t_gtime &epo, const string &obj, const GOBS &gobs);
+
+        /**
+        * @brief get one OSB in meters without locking.
+        *
+        * PRIDE-PPPAR fills missing OSB signal attributes before applying
+        * biases: some composite code signals are averages of component
+        * signals, Galileo C/Q code can use X, and phase OSBs are identical
+        * on the same frequency. GREAT keeps the product sparse and applies
+        * those rules here so correction and AR gating use one definition.
+        */
+        bool _get_osb_unlocked(const string &ac, const t_gtime &epo, const string &obj, const GOBS &gobs, double &bias);
+
+        /** @brief find an exact bias entry without OSB fallback. */
+        t_spt_bias _find_exact(const string &ac, const t_gtime &epo, const string &obj, const GOBS &gobs);
+
+        /** @brief choose the AC used by default bias queries; caller holds _gmutex. */
+        string _select_ac_unlocked(const string &ac = "");
 
         /**
         * @brief get single bias element pointer.

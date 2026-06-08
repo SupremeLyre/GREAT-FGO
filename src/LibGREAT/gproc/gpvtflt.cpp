@@ -2241,6 +2241,35 @@ int great::t_gpvtflt::_selcomsat(vector<t_gsatdata> &data_base, vector<t_gsatdat
     return nSat;
 }
 
+bool great::t_gpvtflt::_hasFixingOsb(const t_gsatdata &satdata, const t_gobs &phase_obs, const t_gobs &code_obs) const
+{
+    if (_fix_mode == FIX_MODE::NO || _gallbias == nullptr || !_gallbias->has_osb())
+        return true;
+    if (phase_obs.gobs() == X || code_obs.gobs() == X)
+        return false;
+
+    t_gobs phase_osb(phase_obs);
+    t_gobs code_osb(code_obs);
+    phase_osb.gobs2to3(satdata.gsys());
+    code_osb.gobs2to3(satdata.gsys());
+
+    const bool has_phase_osb = _gallbias->has_osb(satdata.epoch(), satdata.sat(), phase_osb.gobs());
+    const bool has_code_osb = _gallbias->has_osb(satdata.epoch(), satdata.sat(), code_osb.gobs());
+    if (!has_phase_osb || !has_code_osb)
+    {
+        if (_spdlog)
+        {
+            SPDLOG_LOGGER_DEBUG(_spdlog,
+                                "Skip ambiguity fixing without complete OSB: sat={}, phase={}, code={}, phase_osb={}, code_osb={}",
+                                satdata.sat().c_str(), gobs2str(phase_osb.gobs()).c_str(),
+                                gobs2str(code_osb.gobs()).c_str(), has_phase_osb, has_code_osb);
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void great::t_gpvtflt::_udsdAmb()
 {
 
@@ -2278,6 +2307,7 @@ void great::t_gpvtflt::_udsdAmb()
     }
     // Add ambiguity parameter and appropriate rows/columns covar. matrix
     set<string> mapPRN;
+    set<pair<string, par_type>> osbRejectedAmb;
     for (int i = 0; i < _data.size(); i++)
     {
         auto rsatdata = _data[i];
@@ -2319,6 +2349,7 @@ void great::t_gpvtflt::_udsdAmb()
             }
             bool update_amb = false;
             double amb[2] = {0};
+            bool osb_ready = true;
 
             for (int j = 0; j < 2; j++)
             {
@@ -2345,6 +2376,12 @@ void great::t_gpvtflt::_udsdAmb()
                     update_amb = false;
                     break;
                 }
+                if (!_hasFixingOsb(tmpsatdata, gobs1, gobs1_P) || !_hasFixingOsb(tmpsatdata, gobs2, gobs2_P))
+                {
+                    osb_ready = false;
+                    update_amb = false;
+                    break;
+                }
                 amb[j] = tmpsatdata.L3(gobs1, gobs2);
                 if (double_eq(amb[j], 0.0))
                 {
@@ -2361,6 +2398,11 @@ void great::t_gpvtflt::_udsdAmb()
                     update_amb = true;
                     rsatdata.addslip(true);
                 }
+            }
+            if (!osb_ready)
+            {
+                osbRejectedAmb.insert(make_pair(sat, par_type::AMB_IF));
+                continue;
             }
             if (update_amb == false)
             {
@@ -2453,6 +2495,7 @@ void great::t_gpvtflt::_udsdAmb()
 
                 bool update_amb = false;
                 bool skip = false;
+                bool osb_ready = true;
                 double amb[2] = {0};
                 amb[0] = amb[1] = 0.0;
                 for (int j = 0; j < 2; j++)
@@ -2481,6 +2524,13 @@ void great::t_gpvtflt::_udsdAmb()
                         skip = true;
                         break;
                     }
+                    if (!_hasFixingOsb(tmpsatdata, gobs, gobsP))
+                    {
+                        update_amb = false;
+                        skip = true;
+                        osb_ready = false;
+                        break;
+                    }
                     amb[j] -= tmpsatdata.obs_C(gobsP);
 
                     if (j == 0)
@@ -2503,6 +2553,11 @@ void great::t_gpvtflt::_udsdAmb()
                     }
 
                 } // end base+rove
+                if (!osb_ready)
+                {
+                    osbRejectedAmb.insert(make_pair(sat, amb_type));
+                    continue;
+                }
                 if (skip)
                     continue;
                 if (update_amb == false)
@@ -2558,12 +2613,16 @@ void great::t_gpvtflt::_udsdAmb()
         {
 
             set<string>::iterator prnITER = mapPRN.find(_param[i].prn);
-            if (prnITER == mapPRN.end())
+            const bool osb_rejected = osbRejectedAmb.find(make_pair(_param[i].prn, _param[i].parType)) != osbRejectedAmb.end();
+            if (prnITER == mapPRN.end() || osb_rejected)
             {
 
                 if (_spdlog)
-                    SPDLOG_LOGGER_INFO(_spdlog, "AMB will be removed! For Sat PRN " + _param[i].prn +
+                {
+                    const string reason = osb_rejected ? " due to incomplete OSB" : "";
+                    SPDLOG_LOGGER_INFO(_spdlog, "AMB will be removed" + reason + "! For Sat PRN " + _param[i].prn +
                                                     " Epoch: " + _epoch.str_ymdhms());
+                }
 
                 /* if (_param[i].prn == "C06")
                  {
@@ -2598,6 +2657,7 @@ void great::t_gpvtflt::_udAmb()
 
     // Add ambiguity parameter and appropriate rows/columns covar. matrix
     set<string> mapPRN;
+    set<pair<string, par_type>> osbRejectedAmb;
 
     vector<t_gsatdata>::iterator it;
     for (it = _data.begin(); it != _data.end(); ++it)
@@ -2648,6 +2708,12 @@ void great::t_gpvtflt::_udAmb()
         P5 = it->obs_C(gobs5_P);
         if (_observ == OBSCOMBIN::IONO_FREE)
         {
+            if (!_hasFixingOsb(*it, gobs1, gobs1_P) || !_hasFixingOsb(*it, gobs2, gobs2_P))
+            {
+                osbRejectedAmb.insert(make_pair(it->sat(), par_type::AMB_IF));
+                continue;
+            }
+
             int idx = _param.getParam(_site, par_type::AMB_IF, it->sat());
             if (idx < 0)
             {
@@ -2703,6 +2769,7 @@ void great::t_gpvtflt::_udAmb()
                 if (ib.first > _frequency)
                     continue;
                 t_gobs gobsi;
+                t_gobs gobsPi;
                 double Li;
                 double Pi;
                 par_type amb_type;
@@ -2713,6 +2780,7 @@ void great::t_gpvtflt::_udAmb()
                     Li = L1;
                     Pi = P1;
                     gobsi = gobs1;
+                    gobsPi = gobs1_P;
                 }
                 else if (ib.first == FREQ_2)
                 {
@@ -2720,6 +2788,7 @@ void great::t_gpvtflt::_udAmb()
                     Li = L2;
                     Pi = P2;
                     gobsi = gobs2;
+                    gobsPi = gobs2_P;
                 }
                 else if (ib.first == FREQ_3)
                 {
@@ -2727,6 +2796,7 @@ void great::t_gpvtflt::_udAmb()
                     Li = L3;
                     Pi = P3;
                     gobsi = gobs3;
+                    gobsPi = gobs3_P;
                 }
                 else if (ib.first == FREQ_4)
                 {
@@ -2734,6 +2804,7 @@ void great::t_gpvtflt::_udAmb()
                     Li = L4;
                     Pi = P4;
                     gobsi = gobs4;
+                    gobsPi = gobs4_P;
                 }
                 else if (ib.first == FREQ_5)
                 {
@@ -2741,11 +2812,18 @@ void great::t_gpvtflt::_udAmb()
                     Li = L5;
                     Pi = P5;
                     gobsi = gobs5;
+                    gobsPi = gobs5_P;
                 }
                 else
                 {
                     throw std::logic_error("Unknown band!!");
                 };
+
+                if (!_hasFixingOsb(*it, gobsi, gobsPi))
+                {
+                    osbRejectedAmb.insert(make_pair(it->sat(), amb_type));
+                    continue;
+                }
 
                 if (double_eq(Li, 0.0) || double_eq(Pi, 0.0))
                     continue;
@@ -2808,12 +2886,16 @@ void great::t_gpvtflt::_udAmb()
             if (_param[i].site != _site)
                 continue;
             set<string>::iterator prnITER = mapPRN.find(_param[i].prn);
-            if (prnITER == mapPRN.end())
+            const bool osb_rejected = osbRejectedAmb.find(make_pair(_param[i].prn, _param[i].parType)) != osbRejectedAmb.end();
+            if (prnITER == mapPRN.end() || osb_rejected)
             {
 
                 if (_spdlog)
-                    SPDLOG_LOGGER_INFO(_spdlog, "AMB will be removed! For Sat PRN " + _param[i].prn +
+                {
+                    const string reason = osb_rejected ? " due to incomplete OSB" : "";
+                    SPDLOG_LOGGER_INFO(_spdlog, "AMB will be removed" + reason + "! For Sat PRN " + _param[i].prn +
                                                     " Epoch: " + _epoch.str_ymdhms());
+                }
 
                 _amb_obs.erase(make_pair(_param[i].prn, _param[i].parType));
 

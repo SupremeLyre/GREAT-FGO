@@ -136,6 +136,16 @@ namespace great
         void _udAmb();
 
         /**
+        * @brief check OSB completeness for one ambiguity-fixing signal pair.
+        *
+        * PPP-AR requires the selected carrier and code signal to be corrected
+        * by compatible satellite OSBs. If either side is missing, the
+        * Li-Pi ambiguity can absorb an unmodelled signal bias and should not
+        * enter the integer ambiguity candidate set.
+        */
+        bool _hasFixingOsb(const t_gsatdata &satdata, const t_gobs &phase_obs, const t_gobs &code_obs) const;
+
+        /**
         * @brief obtain satcrd,satclk,satele,satazi,rho, it must be two bands.
         * @param[in] ssite       site
         * @param[in] sdata       sat data

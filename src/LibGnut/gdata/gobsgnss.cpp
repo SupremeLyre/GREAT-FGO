@@ -346,27 +346,40 @@ bool t_gobsgnss::apply_osb(t_gallbias *allbias)
         t_gobs gobs_type(obs_type);
         gobs_type.gobs2to3(gsys);
 
-        double osb_val = allbias->get(gepo, gsat, gobs_type.gobs(), gobs_type.gobs());
+        double osb_meter = 0.0;
+        const bool has_osb = allbias->get_osb(gepo, gsat, gobs_type.gobs(), osb_meter);
 
-        // if we found a valid OSB, apply it
-        if (osb_val != 0.0 && osb_val != 999.0)
+        // BIA parsing normalizes every OSB to meters before it reaches
+        // t_gbias. Code observations are stored in meters, so the satellite
+        // OSB is subtracted directly. Carrier phase observations are stored
+        // in whole cycles, so the same meter-domain OSB must be divided by
+        // the signal wavelength, matching the PRIDE-PPPAR read_bias/rdrnxoi2
+        // convention: vobs = bias_meter / lambda for phase.
+        if (has_osb)
         {
-            // the raw OSB from BIA corresponds to correction
-            // O_measured = O_compute + B_satellite
-            // wait, if bias() method returns OSB value in meters...
+            double osb_correction = 0.0;
             if (gobs_type.is_code())
             {
-                osb_val *= CLIGHT * 1e-9;
+                osb_correction = osb_meter;
             }
             else if (gobs_type.is_phase())
             {
-                osb_val *= this->frequency(gobs_type.band()) * 1e-9;
+                const double lambda = this->wavelength(gobs_type.band());
+                if (double_eq(lambda, 0.0))
+                    continue;
+                osb_correction = osb_meter / lambda;
             }
-            obs_value -= osb_val;
+            else
+            {
+                continue;
+            }
+
+            const double obs_before = obs_value;
+            obs_value -= osb_correction;
             if (_spdlog)
             {
-                SPDLOG_LOGGER_INFO(_spdlog, "Applying OSB: sat={}, obs={}, osb_val={}, obs_before={}, obs_after={}",
-                                   gsat.c_str(), gobs_type.gobs(), osb_val, this->getobs(gobs_type.gobs()), obs_value);
+                SPDLOG_LOGGER_INFO(_spdlog, "Applying OSB: sat={}, obs={}, osb_meter={}, correction={}, obs_before={}, obs_after={}",
+                                   gsat.c_str(), gobs_type.gobs(), osb_meter, osb_correction, obs_before, obs_value);
             }
             this->resetobs(obs_type, obs_value);
         }
