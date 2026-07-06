@@ -768,11 +768,26 @@ Eigen::Vector3d great::t_gsetign::NHC_std()
     double x = 0.0, y = 0.0, z = 0.0;
     ss >> x;
     _gmutex.unlock();
+    if (str.empty())
+        return Eigen::Vector3d(0.5, 0.5, 0.2);
     if (!(ss >> y))
         return Eigen::Vector3d(x, x, x);
     if (!(ss >> z))
         return Eigen::Vector3d(x, x, y);
     return Eigen::Vector3d(x, y, z);
+}
+
+double great::t_gsetign::NHC_frequency()
+{
+    _gmutex.lock();
+    double freq = _doc.child(XMLKEY_ROOT)
+                      .child(XMLKEY_IGN)
+                      .child("NHC")
+                      .child("Frequency")
+                      .attribute("Value")
+                      .as_double();
+    _gmutex.unlock();
+    return freq > 0.0 ? freq : 1.0;
 }
 
 Eigen::Vector3d great::t_gsetign::ZUPT_std()

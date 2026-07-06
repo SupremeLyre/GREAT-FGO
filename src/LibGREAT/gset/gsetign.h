@@ -318,6 +318,13 @@ namespace great
         Eigen::Vector3d NHC_std();
 
         /**
+         * @brief get update frequency of NHC.
+         *
+         * @return double
+         */
+        double NHC_frequency();
+
+        /**
          * @brief
          *
          * @return Eigen::Vector3d

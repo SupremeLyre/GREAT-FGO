@@ -238,6 +238,9 @@ great::t_gsinskf::t_gsinskf(gnut::t_gsetbase *gset, t_spdlog spdlog, string site
     Qt = Xk = VectorXd::Zero(nq);
     Zk = VectorXd::Zero(nr);
     Rk = MatrixXd::Zero(nr, nr);
+    _imudata = nullptr;
+    _ododata = nullptr;
+    _fins = nullptr;
 
     this->sins = t_gsins(gset);
     this->gset(gset);
@@ -569,18 +572,19 @@ bool great::t_gsinskf::set_meas_ODO(const double &vf, double t)
 }
 MOTION_TYPE great::t_gsinskf::motion_state()
 {
+    const double nhc_min_forward_speed = 1.0;       // m/s, from truth2.pos moving segments.
+    const double nhc_max_body_rate = 8.0 * t_gglv::dps;
     double vf = -t_gglv::INF;
-    if (sins.wnb.norm() < 1.5 * t_gglv::dps && abs(sins.vb(1)) > 5)
-        return m_straight;
-    else if (sins.an.norm() < 1 && sins.wnb.norm() < 1 * t_gglv::dps && sins.vn.norm() < 0.1)
+    if (sins.an.norm() < 1 && sins.wnb.norm() < 1 * t_gglv::dps && sins.vn.norm() < 0.1)
         return m_static;
-    else if (_ododata->load(_ins_crt, vf, _shm.delay_odo))
+    else if (_ododata && _ododata->load(_ins_crt, vf, _shm.delay_odo))
     {
         if (sins.vn.norm() < 1 && abs(vf) < 0.1)
             return m_static;
     }
-    else
-        return m_default;
+    if (sins.wnb.norm() < nhc_max_body_rate && abs(sins.vb(1)) > nhc_min_forward_speed)
+        return m_straight;
+    return m_default;
 }
 
 MEAS_TYPE great::t_gsinskf::meas_state()
@@ -877,6 +881,7 @@ bool great::t_gsinskf::_set_meas()
         MeasVel = Eigen::Vector3d::Zero();
         break;
     case NHC_MEAS:
+    {
         Zk(0) = (sins.Cvb * sins.vb - MeasVel + sins.Cvb * (t_gbase::askew(sins.web) * odo_lever))(0);
         Zk(1) = (sins.Cvb * sins.vb - MeasVel + sins.Cvb * (t_gbase::askew(sins.web) * odo_lever))(2);
         Rk(0, 0) = _Cov_MeasNHC(0);
@@ -884,6 +889,7 @@ bool great::t_gsinskf::_set_meas()
         MeasVel = Eigen::Vector3d::Zero();
         measflag = 1;
         break;
+    }
     case ODO_MEAS: // MeasVf=vb(1)-odo_vel
         Zk(0) = sins.vb(1) - MeasVf * (1 + _odoscale) + (t_gbase::askew(sins.web) * odo_lever)(1);
         Rk(0, 0) = _Cov_MeasOdo;

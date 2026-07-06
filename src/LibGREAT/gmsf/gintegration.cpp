@@ -798,10 +798,11 @@ int great::t_gintegration::_getMeas()
     double t = _ins_crt.sow() + _ins_crt.dsec();
     MEAS_TYPE meas_type = meas_state();
     double intv = _shm.ts > 0.0 ? _shm.ts : sins.nts;
+    const double nhc_rate = _shm.NHC_frequency;
+    if (_shm._NHC && meas_type == NHC_MEAS && floor(t * nhc_rate) != floor((t - intv) * nhc_rate))
+        _Meas_Type.insert(NHC_MEAS);
     if (floor(t) != floor(t - intv))
     {
-        if (_shm._NHC && meas_type == NHC_MEAS)
-            _Meas_Type.insert(NHC_MEAS);
         if (_shm._ZUPT && meas_type == ZUPT_MEAS)
             _Meas_Type.insert(MEAS_TYPE::ZUPT_MEAS);
     }
