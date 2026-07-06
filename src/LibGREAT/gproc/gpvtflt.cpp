@@ -15,6 +15,7 @@
 #include "gproc/gqualitycontrol.h"
 #include "gutils/gtimesync.h"
 #include <algorithm>
+#include <cmath>
 
 great::t_gpvtflt::t_gpvtflt(string mark, string mark_base, t_gsetbase *gset, t_gallproc *allproc)
     : t_gspp(mark, gset), t_gpppflt(mark, gset), _fix_mode(FIX_MODE::NO), _isFirstFix(true), _amb_state(false),
@@ -1944,6 +1945,72 @@ string great::t_gpvtflt::_quality_grade(const t_gposdata::data_pos &pos)
         return "6";
 }
 
+void great::t_gpvtflt::_writeNmeaGga(const t_gtime &epoch, const t_gtriple &blh, int nsat, double hdop)
+{
+    if (!_nmea)
+        return;
+
+    string sentence = _nmeaGga(epoch, blh, nsat, hdop);
+    _nmea->write(sentence.c_str(), sentence.size());
+    _nmea->flush();
+}
+
+string great::t_gpvtflt::_nmeaChecksum(const string &body) const
+{
+    unsigned char checksum = 0;
+    for (char c : body)
+    {
+        checksum ^= static_cast<unsigned char>(c);
+    }
+
+    ostringstream os;
+    os << uppercase << hex << setw(2) << setfill('0') << static_cast<int>(checksum);
+    return os.str();
+}
+
+string great::t_gpvtflt::_nmeaGga(const t_gtime &epoch, const t_gtriple &blh, int nsat, double hdop) const
+{
+    t_gtime utc(epoch);
+    utc.tsys(t_gtime::UTC);
+
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    utc.hms(hour, minute, second);
+    double sec = second + utc.dsec();
+
+    double lat_abs = fabs(blh[0]);
+    double lon_abs = fabs(blh[1]);
+    int lat_deg = static_cast<int>(lat_abs);
+    int lon_deg = static_cast<int>(lon_abs);
+    double lat_min = (lat_abs - lat_deg) * 60.0;
+    double lon_min = (lon_abs - lon_deg) * 60.0;
+    int nmea_nsat = std::min(std::max(nsat, 0), 99);
+    int quality = _amb_state ? 4 : 5;
+    double nmea_hdop = hdop > 0.0 ? hdop : 0.0;
+
+    ostringstream body;
+    body << "GNGGA,"
+         << setfill('0') << setw(2) << hour << setw(2) << minute
+         << fixed << setprecision(2) << setw(5) << sec << setfill(' ')
+         << ","
+         << setfill('0') << setw(2) << lat_deg << fixed << setprecision(7) << setw(10) << lat_min << setfill(' ')
+         << "," << (blh[0] >= 0.0 ? "N" : "S")
+         << ","
+         << setfill('0') << setw(3) << lon_deg << fixed << setprecision(7) << setw(10) << lon_min << setfill(' ')
+         << "," << (blh[1] >= 0.0 ? "E" : "W")
+         << "," << quality
+         << "," << setfill('0') << setw(2) << nmea_nsat << setfill(' ')
+         << fixed << setprecision(1)
+         << "," << nmea_hdop
+         << "," << blh[2] << ",M"
+         << ",0.0,M"
+         << ",1.0,0000";
+
+    string body_str = body.str();
+    return "$" + body_str + "*" + _nmeaChecksum(body_str) + "\r\n";
+}
+
 int great::t_gpvtflt::processBatch(const t_gtime &beg_r, const t_gtime &end_r, bool prtOut)
 {
     _gmutex.lock();
@@ -3095,6 +3162,7 @@ void great::t_gpvtflt::_prtOut(t_gtime &epoch, t_gallpar &X, const SymmetricMatr
     Eigen::Vector3d Qpos(Xrms * Xrms, Yrms * Yrms, Zrms * Zrms), Qvel(Vxrms * Vxrms, Vyrms * Vyrms, Vzrms * Vzrms);
     Eigen::Vector3d position(xyz_ecc[0], xyz_ecc[1], xyz_ecc[2]), velocity(vRec[0], vRec[1], vRec[2]);
     t_gposdata::data_pos posdata = t_gposdata::data_pos{crt, position, velocity, Qpos, Qvel, pdop, nsat, _amb_state};
+    _writeNmeaGga(epoch, blh, static_cast<int>(sat_list.size()), hdop);
     bool ins = dynamic_cast<t_gsetinp *>(_set)->input_size("imu") > 0 ? true : false;
     // write kml
     if (_kml && !ins)
@@ -3173,6 +3241,12 @@ void great::t_gpvtflt::_prtOut(t_gtime &epoch, t_gallpar &X, const SymmetricMatr
         map<string, int> satsnum = _param.freq_sats_num(2);
         os << setw(8) << satsnum["Single"] << setw(8) << satsnum["Double"];
     }
+    if (_crd_est != CONSTRPAR::FIX)
+    {
+        os << fixed << setprecision(9) << " " << setw(15) << blh[0]      // [deg]
+           << " " << setw(15) << blh[1]                                  // [deg]
+           << fixed << setprecision(4) << " " << setw(12) << blh[2];     // [m]
+    }
     os << endl;
 
     return;
@@ -3222,6 +3296,10 @@ void great::t_gpvtflt::_prtOutHeader()
     if (_isBase)
         os << " " << setw(10) << "BL";
     os << " " << setw(8) << "Quality";
+    if (_observ == OBSCOMBIN::RAW_MIX)
+        os << setw(8) << "Single" << setw(8) << "Double";
+    if (_crd_est != CONSTRPAR::FIX)
+        os << " " << setw(15) << "Latitude" << " " << setw(15) << "Longitude" << " " << setw(12) << "Height";
     os << endl;
 
     // second line
@@ -3251,6 +3329,10 @@ void great::t_gpvtflt::_prtOutHeader()
     if (_isBase)
         os << " " << setw(10) << "(m)";
     os << setw(8) << " ";
+    if (_observ == OBSCOMBIN::RAW_MIX)
+        os << setw(8) << "(#)" << setw(8) << "(#)";
+    if (_crd_est != CONSTRPAR::FIX)
+        os << " " << setw(15) << "(deg)" << " " << setw(15) << "(deg)" << " " << setw(12) << "(m)";
     os << endl;
 
     // Print flt results

@@ -98,7 +98,9 @@ class LibGREAT_LIBRARY_EXPORT t_gsins
     * @param[in] os   out os
     *
     */
-    void prt_sins(ostringstream &os);
+    Eigen::Vector3d prt_sins(ostringstream &os);
+
+    void prt_blh(ostringstream &os, const Eigen::Vector3d &pos_out);
     // void int_sec(bool _beg_end = true);
     void debug_ins_info();
 

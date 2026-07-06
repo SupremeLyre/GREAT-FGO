@@ -314,13 +314,14 @@ void great::t_gintegration::_write(string info)
         meas = meas2str(*_Meas_Type.begin()); //  ( GNSS -> ZUPT -> ODO -> NHC )
     _prt_ins_kml();
     ostringstream os;
-    sins.prt_sins(os);
+    Eigen::Vector3d pos_out = sins.prt_sins(os);
     if (_shm._odo)
         os << fixed << setprecision(4) << setw(12) << 1.0 + _odoscale;
     os << fixed << setprecision(0) << " " << setw(10) << meas       // meas
        << " " << setw(5) << nsat                                    // nsat
        << fixed << setprecision(2) << " " << setw(7) << _dop.pdop() // pdop
        << fixed << setprecision(2) << " " << setw(8) << amb << setw(10) << (_amb_state ? _ambfix->get_ratio() : 0.0);
+    sins.prt_blh(os, pos_out);
     os << endl;
     _fins->write(os.str().c_str(), os.str().size());
     os.str("");

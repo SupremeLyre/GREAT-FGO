@@ -1622,17 +1622,19 @@ void gfgomsf::t_gfgo_gins::write(string info)
     ostringstream os;
     os << fixed << _opt_valid;
     int q = prt_ins_kml();
-    sins.prt_sins(os);
+    Eigen::Vector3d pos_out = sins.prt_sins(os);
     os << fixed << setprecision(0) << " " << setw(10) << meas                                   // meas
        << " " << setw(5) << nsat                                                                // nsat
        << fixed << setprecision(2) << " " << setw(7) << (_dop.pdop() < 100 ? _dop.pdop() : 0.0) // pdop
        << fixed << setprecision(2) << " " << setw(8) << amb << setw(8) << (_amb_state ? _ambfix->get_ratio() : 0.0);
+    sins.prt_blh(os, pos_out);
     os << endl;
     _fins->write(os.str().c_str(), os.str().size());
 
     double Xrms = 0.0, Yrms = 0.0, Zrms = 0.0, Vxrms = 0.0, Vyrms = 0.0, Vzrms = 0.0;
+    const size_t flt_prefix_len = 18 + 18 * 3 + 10 * 3;
     ostringstream osflt("");
-    osflt << os.str().substr(0, 104);
+    osflt << os.str().substr(0, flt_prefix_len);
     osflt << fixed << setprecision(4) << " " << setw(9) << Xrms // [m]
           << " " << setw(9) << Yrms                             // [m]
           << " " << setw(9) << Zrms                             // [m]
@@ -1647,6 +1649,7 @@ void gfgomsf::t_gfgo_gins::write(string info)
           << fixed << setprecision(2) << " " << setw(8) << 0           // m0
           << " " << setw(8) << amb << setprecision(2) << " " << fixed << setw(10)
           << (_amb_state ? _ambfix->get_ratio() : 0.0);
+    sins.prt_blh(osflt, pos_out);
     osflt << endl;
     if ((!_opt_flag) && _flt)
         _flt->write(osflt.str().c_str(), osflt.str().size());

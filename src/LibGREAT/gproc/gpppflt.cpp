@@ -29,6 +29,7 @@ namespace gnut
         t_gxml("kml"),
         _read(false),
         _flt(0),
+        _nmea(0),
         _kml(false),
         _beg_end(true)
     {
@@ -65,6 +66,7 @@ namespace gnut
         t_gxml("kml"),
         _read(false),
         _flt(0),
+        _nmea(0),
         _kml(false),
         _beg_end(true)
     {
@@ -127,6 +129,14 @@ namespace gnut
                 _flt->close();
             };
             delete _flt;
+        }
+        if (_nmea)
+        {
+            if (_nmea->is_open())
+            {
+                _nmea->close();
+            };
+            delete _nmea;
         }
 
         this->write(_kml_name);
@@ -229,6 +239,16 @@ namespace gnut
             _flt->tsys(t_gtime::GPS);
             _flt->mask(tmp);
             _flt->append(dynamic_cast<t_gsetout *>(_set)->append());
+        }
+
+        tmp = dynamic_cast<t_gsetout *>(_set)->outputs("nmea");
+        if (!tmp.empty() && !_read)
+        {
+            substitute(tmp, "$(rec)", _site, false);
+            _nmea = new t_giof;
+            _nmea->tsys(t_gtime::GPS);
+            _nmea->mask(tmp);
+            _nmea->append(dynamic_cast<t_gsetout *>(_set)->append());
         }
 
         tmp = dynamic_cast<t_gsetout *>(_set)->outputs("kml");

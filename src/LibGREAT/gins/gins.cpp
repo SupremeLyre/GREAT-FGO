@@ -142,7 +142,7 @@ void great::t_gsins::prt_header(ostringstream &os, bool imu_scale, bool use_odo)
         os << setw(12) << "OdoScale";
     os << setw(12) << "MeasType" << setw(7) << "Nsat" << setw(7) << "PDOP" << setw(12) << "AmbStatus" << setw(7)
        << "Ratio";
-    os << "   ratio" << endl;
+    os << "   ratio" << setw(15) << "Latitude" << setw(15) << "Longitude" << setw(12) << "Height" << endl;
 
     // the second line
     os << "# ";
@@ -163,15 +163,17 @@ void great::t_gsins::prt_header(ostringstream &os, bool imu_scale, bool use_odo)
     if (use_odo)
         os << setw(12) << "#";
     os << setw(12) << " " << setw(7) << "#" << setw(7) << "#" << setw(12) << " ";
+    os << setw(15) << "(deg)" << setw(15) << "(deg)" << setw(12) << "(m)";
     os << endl;
 }
 
-void great::t_gsins::prt_sins(ostringstream &os)
+Eigen::Vector3d great::t_gsins::prt_sins(ostringstream &os)
 {
     // format
     Vector3d pos_out;
     std::string content = os.str();
-    if (abs(xyz_out[0]) < 0.01 || content[0] == '0')
+    bool force_pos_ecef = !content.empty() && content[0] == '0';
+    if (abs(xyz_out[0]) < 0.01 || force_pos_ecef)
     {
         pos_out = pos_ecef;
     }
@@ -198,6 +200,15 @@ void great::t_gsins::prt_sins(ostringstream &os)
     os << fixed << setprecision(4) << setw(10) << att_out(0) << setw(10) << att_out(1) << setw(10) << att_out(2);
     os << fixed << setprecision(4) << setw(12) << eb_out(0) << setw(12) << eb_out(1) << setw(12) << eb_out(2);
     os << fixed << setprecision(4) << setw(12) << db_out(0) << setw(12) << db_out(1) << setw(12) << db_out(2);
+    return pos_out;
+}
+
+void great::t_gsins::prt_blh(ostringstream &os, const Eigen::Vector3d &pos_out)
+{
+    Vector3d blh_out = Cart2Geod(pos_out, false);
+    os << fixed << setprecision(9) << " " << setw(15) << blh_out(0) / t_gglv::deg
+       << " " << setw(15) << blh_out(1) / t_gglv::deg
+       << fixed << setprecision(4) << " " << setw(12) << blh_out(2);
 }
 
 void great::t_gsins::debug_ins_info()
@@ -634,7 +645,8 @@ void great::t_gsinskf::write()
 {
     ostringstream os;
     _prt_ins_kml();
-    sins.prt_sins(os);
+    Eigen::Vector3d pos_out = sins.prt_sins(os);
+    sins.prt_blh(os, pos_out);
     sins.prt_header(os, _shm._imu_scale, _shm._odo);
     _fins->write(os.str().c_str(), os.str().size());
     os.str("");

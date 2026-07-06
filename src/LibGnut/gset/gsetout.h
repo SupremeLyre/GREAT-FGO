@@ -49,9 +49,8 @@ namespace gnut
         PPP_OUT,
         FLT_OUT,
         KML_OUT,
-        INS_OUT
-		
-
+        INS_OUT,
+        NMEA_OUT
     };
 
     class LibGnut_LIBRARY_EXPORT t_gsetout : public virtual t_gsetbase

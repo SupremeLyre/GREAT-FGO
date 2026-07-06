@@ -79,7 +79,8 @@ namespace gnut
 
         xml_node line;                      ///< working line read from
         bool _read;                         ///< is read
-        t_giof *_flt;       
+        t_giof *_flt;
+        t_giof *_nmea;
         
        
         //map<OFMT, t_gtcp*> _maptcp;  // zhshen///< filter file 

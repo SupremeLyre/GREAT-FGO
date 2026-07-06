@@ -35,6 +35,7 @@ namespace gnut
     _OFMT_supported.insert(LOG_OUT);
     _OFMT_supported.insert(PPP_OUT);
     _OFMT_supported.insert(FLT_OUT);
+    _OFMT_supported.insert(NMEA_OUT);
 
     
   }

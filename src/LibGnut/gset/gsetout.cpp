@@ -44,6 +44,8 @@ namespace gnut
             return KML_OUT;
         if (tmp == "INS")
             return INS_OUT;
+        if (tmp == "NMEA")
+            return NMEA_OUT;
         return OFMT(-1);
     }
 
@@ -59,6 +61,12 @@ namespace gnut
             return "PPP";
         case FLT_OUT:
             return "FLT";
+        case KML_OUT:
+            return "KML";
+        case INS_OUT:
+            return "INS";
+        case NMEA_OUT:
+            return "NMEA";
         default:
             return "UNDEF";
         }
@@ -307,6 +315,7 @@ namespace gnut
 
         cerr << " <outputs append=\"" << _append << "\" verb=\"" << _verb << "\" >\n"
              << "   <flt> file://dir/name </flt>    \t\t <!-- filter output encoder -->\n"
+             << "   <nmea> file://dir/name </nmea>  \t\t <!-- NMEA output encoder -->\n"
              << " </outputs>\n";
 
         _gmutex.unlock();

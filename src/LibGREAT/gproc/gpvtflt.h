@@ -226,6 +226,15 @@ namespace great
         */
         virtual string _quality_grade(const t_gposdata::data_pos &pos);
 
+        /** @brief write GNGGA NMEA sentence. */
+        void _writeNmeaGga(const t_gtime &epoch, const t_gtriple &blh, int nsat, double hdop);
+
+        /** @brief generate GNGGA NMEA sentence. */
+        string _nmeaGga(const t_gtime &epoch, const t_gtriple &blh, int nsat, double hdop) const;
+
+        /** @brief calculate NMEA checksum. */
+        string _nmeaChecksum(const string &body) const;
+
         /**
         * @brief filter time update.
         * @param[in] runEpoch     current epoch
